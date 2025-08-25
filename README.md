@@ -40,6 +40,5 @@ As principais colunas do quadro no Trello são:
 - **Review/Testing** → itens concluídos aguardando validação  
 - **Done** → funcionalidades finalizadas e entregues  
 
-🔗 **Acesse o quadro no Trello:** [RPG Chromance - Wise Systems]((https://trello.com/invite/b/68ab8e0ecfbf91119b5c6636/ATTIecabd367f91b8616aeaedd53cb544dfcAD69D16B/rpg-wise))  
-)  
+🔗 **Acesse o quadro no Trello:** ((https://trello.com/invite/b/68ab8e0ecfbf91119b5c6636/ATTIecabd367f91b8616aeaedd53cb544dfcAD69D16B/rpg-wise))  
 
