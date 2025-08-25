@@ -32,13 +32,5 @@ O projeto segue a metodologia **Scrum**, organizada em **sprints semanais**, gar
 
 A gestão das tarefas é realizada no **Trello**, onde os PBIs (Product Backlog Items) são divididos e acompanhados em cada sprint.  
 
-As principais colunas do quadro no Trello são:
-
-- **Product Backlog** → histórias e requisitos a serem desenvolvidos  
-- **Sprint Backlog** → tarefas priorizadas para a sprint atual  
-- **In Progress** → atividades em andamento  
-- **Review/Testing** → itens concluídos aguardando validação  
-- **Done** → funcionalidades finalizadas e entregues  
-
 🔗 **Acesse o quadro no Trello:** ((https://trello.com/invite/b/68ab8e0ecfbf91119b5c6636/ATTIecabd367f91b8616aeaedd53cb544dfcAD69D16B/rpg-wise))  
 
