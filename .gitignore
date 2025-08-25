@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.egg
+*.log
+
+# --- Virtual Env ---
+.venv/
+env/
+venv/
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.swp
+
+# --- Sistema ---
+.DS_Store
+Thumbs.db
+
+# --- Tests ---
+.coverage
+htmlcov/
+.pytest_cache/
+
+# --- Build ---
+dist/
+build/
+.eggs/
+
+# --- Config local ---
+.env
+.env.*
+!env.example   # mantém o env.example no repo

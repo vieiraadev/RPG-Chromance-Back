@@ -2,6 +2,7 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from app.core.database import get_db
+from app.core.middleware import setup_middlewares
 from app.api.auth import router as auth_router
 from app.api.characters import router as chars_router
 from app.api.campaigns import router as camp_router
@@ -12,12 +13,15 @@ app = FastAPI(
     description="Contrato inicial (Auth, Personagem, Campanha, Histórico e Ação).",
 )
 
-# ---- registrando grupos de rotas ----
+# aplica middlewares (CORS)
+setup_middlewares(app)
+
+# grupos de rotas
 app.include_router(auth_router)
 app.include_router(chars_router)
 app.include_router(camp_router)
 
-# ---- seus endpoints de saúde (mantidos) ----
+# endpoints de saúde
 @app.get("/liveness", include_in_schema=False)
 async def liveness():
     return {"status": "alive"}
@@ -31,7 +35,11 @@ async def readiness():
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not_ready", "deps": {"mongo": "fail"}, "detail": str(e)[:120]},
+            content={
+                "status": "not_ready",
+                "deps": {"mongo": "fail"},
+                "detail": str(e)[:120],
+            },
         )
 
 @app.get("/health", tags=["Infra"])
@@ -41,4 +49,7 @@ async def health():
         await db.command("ping")
         return {"ok": True, "db": "ok"}
     except Exception:
-        return JSONResponse(status_code=503, content={"ok": False, "db": "fail"})
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "db": "fail"},
+        )
