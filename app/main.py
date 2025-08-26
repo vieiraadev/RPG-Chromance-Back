@@ -1,4 +1,3 @@
-# app/main.py
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from app.core.database import get_db
@@ -6,6 +5,7 @@ from app.core.middleware import setup_middlewares
 from app.api.auth import router as auth_router
 from app.api.characters import router as chars_router
 from app.api.campaigns import router as camp_router
+from app.core.database import mongodb
 
 app = FastAPI(
     title="RPG Chromance API — Cyberpunk",

@@ -1,10 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Literal
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 class SignupRequest(BaseModel):
-    nome: str = Field(..., examples=["Vitor"])
-    email: EmailStr = Field(..., examples=["vitor@neon.city"])
-    senha: str = Field(..., min_length=6)
+    nome: str
+    email: EmailStr
+    senha: str
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -12,9 +12,9 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: Literal["bearer"] = "bearer"
+    token_type: str = "bearer"
 
 class UserOut(BaseModel):
     id: str
     nome: str
-    email: EmailStr
+    email: str

@@ -1,17 +1,54 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from .. import config
+from pymongo import MongoClient
+from pymongo.database import Database
+from app.config import MONGO_URI, MONGO_DB
+import logging
 
-_client: AsyncIOMotorClient | None = None
-_db = None
+logger = logging.getLogger(__name__)
 
-def get_client() -> AsyncIOMotorClient:
-    global _client
-    if _client is None:
-        _client = AsyncIOMotorClient(config.MONGO_URI)
-    return _client
+class MongoDB:
+    _instance = None
+    _client = None
+    _database = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if self._client is None:
+            self.connect()
+    
+    def connect(self):
+        """Conecta ao MongoDB"""
+        try:
+            self._client = MongoClient(MONGO_URI)
+            self._database = self._client[MONGO_DB]
+            self._client.admin.command('ping')
+            logger.info(f"Conectado ao MongoDB: {MONGO_DB}")
+        except Exception as e:
+            logger.error(f"Erro ao conectar ao MongoDB: {e}")
+            raise
+    
+    @property
+    def client(self) -> MongoClient:
+        return self._client
+    
+    @property
+    def database(self) -> Database:
+        return self._database
+    
+    def close(self):
+        """Fecha a conexão"""
+        if self._client:
+            self._client.close()
 
-def get_db():
-    global _db
-    if _db is None:
-        _db = get_client().get_database(config.MONGO_DB)
-    return _db
+mongodb = MongoDB()
+
+def get_database() -> Database:
+    """Retorna a instância do database"""
+    return mongodb.database
+
+def get_db() -> Database:
+    """Função compatível com main.py existente"""
+    return mongodb.database
