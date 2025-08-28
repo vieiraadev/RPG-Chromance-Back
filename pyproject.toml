@@ -1,0 +1,29 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["app"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203","W503"]   # compat c/ Black
+per-file-ignores = ["app/__init__.py:F401"]
+
+[tool.pylint.main]
+py-version = "3.11"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+  "C0114", 
+  "C0115",  
+  "C0116"  
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.imports]
+known-first-party = ["app"]

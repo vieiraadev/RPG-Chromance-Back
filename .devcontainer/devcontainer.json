@@ -1,12 +1,10 @@
 {
   "name": "RPG Chromance Backend",
   "image": "mcr.microsoft.com/devcontainers/python:3.11",
-
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -14,31 +12,28 @@
         "ms-python.vscode-pylance",
         "ms-python.black-formatter",
         "ms-python.isort",
-        "ms-python.flake8",
-        "ms-python.pylint",
         "ms-azuretools.vscode-docker",
         "ms-vscode.vscode-json"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "",
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.terminal.activateEnvironment": false,
         "python.formatting.provider": "black",
-        "python.linting.enabled": true,
-        "python.linting.pylintEnabled": true,
-        "python.linting.flake8Enabled": true,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": { "source.organizeImports": true }
+        "python.linting.enabled": false,
+        "python.linting.pylintEnabled": false,
+        "python.linting.flake8Enabled": false,
+        "python.analysis.diagnosticMode": "openFilesOnly",
+        "python.analysis.typeCheckingMode": "off",
+        "editor.formatOnSave": false,
+        "python.analysis.extraPaths": [
+          "/workspaces/RPG-Chromance-Back",
+          "/workspaces/RPG-Chromance-Back/app"
+        ]
       }
     }
   },
-
   "workspaceFolder": "/workspaces/RPG-Chromance-Back",
-
   "forwardPorts": [8000],
-
-  "postCreateCommand": "python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
-
-  "postStartCommand": "echo 'source ~/.bashrc 2>/dev/null || true; [ -f .venv/bin/activate ] && source .venv/bin/activate' >> ~/.bashrc",
-
+  "postCreateCommand": "pip install -r requirements.txt",
   "remoteUser": "vscode"
-
 }

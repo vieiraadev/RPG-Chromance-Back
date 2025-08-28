@@ -1,5 +1,7 @@
 import os
+
 from fastapi.middleware.cors import CORSMiddleware
+
 
 def setup_middlewares(app):
     env_origins = os.getenv("CORS_ORIGINS")
