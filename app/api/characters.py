@@ -11,6 +11,7 @@ from app.schemas.character import (
     CharacterResponse,
     CharacterListResponse
 )
+from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/characters", tags=["Characters"])
 
@@ -25,15 +26,13 @@ def get_character_service(db: Database = Depends(get_database)) -> CharacterServ
 async def create_character(
     character_data: CharacterCreate,
     service: CharacterService = Depends(get_character_service),
-    user_id: Optional[str] = None 
+    current_user_id: str = Depends(get_current_user)
 ):
     """
-    Cria um novo personagem
+    Cria um novo personagem para o usuário autenticado
     """
     try:
-        user_id = user_id or "user123"
-        
-        character = await service.create_character(character_data, user_id)
+        character = await service.create_character(character_data, current_user_id)
         return character
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -44,17 +43,15 @@ async def create_character(
 @router.get("", response_model=dict)
 async def list_characters(
     page: int = Query(1, ge=1, description="Número da página"),
-    limit: int = Query(100, ge=1, le=1000, description="Itens por página"), 
+    limit: int = Query(100, ge=1, le=1000, description="Itens por página"),
     service: CharacterService = Depends(get_character_service),
-    user_id: Optional[str] = None
+    current_user_id: str = Depends(get_current_user) 
 ):
     """
-    Lista todos os personagens
+    Lista apenas os personagens do usuário autenticado
     """
     try:
-        user_id = user_id or "user123"
-        
-        result = await service.list_characters(user_id, page, limit)
+        result = await service.list_characters(current_user_id, page, limit)
         return result
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -64,19 +61,17 @@ async def list_characters(
 async def get_character(
     character_id: str,
     service: CharacterService = Depends(get_character_service),
-    user_id: Optional[str] = None
+    current_user_id: str = Depends(get_current_user) 
 ):
     """
-    Busca um personagem específico por ID
+    Busca um personagem específico 
     """
     try:
-        user_id = user_id or "user123"
-        
-        character = await service.get_character(character_id, user_id)
+        character = await service.get_character(character_id, current_user_id)
         if not character:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
-                detail="Personagem não encontrado"
+                detail="Personagem não encontrado ou não autorizado"
             )
         return character
     except HTTPException:
@@ -90,19 +85,17 @@ async def update_character(
     character_id: str,
     update_data: CharacterUpdate,
     service: CharacterService = Depends(get_character_service),
-    user_id: Optional[str] = None
+    current_user_id: str = Depends(get_current_user)
 ):
     """
-    Atualiza um personagem existente
+    Atualiza um personagem
     """
     try:
-        user_id = user_id or "user123"
-        
-        character = await service.update_character(character_id, update_data, user_id)
+        character = await service.update_character(character_id, update_data, current_user_id)
         if not character:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
-                detail="Personagem não encontrado"
+                detail="Personagem não encontrado ou não autorizado"
             )
         return character
     except HTTPException:
@@ -117,19 +110,17 @@ async def update_character(
 async def delete_character(
     character_id: str,
     service: CharacterService = Depends(get_character_service),
-    user_id: Optional[str] = None
+    current_user_id: str = Depends(get_current_user)
 ):
     """
-    Remove um personagem (soft delete)
+    Remove um personagem
     """
     try:
-        user_id = user_id or "user123"
-        
-        success = await service.delete_character(character_id, user_id)
+        success = await service.delete_character(character_id, current_user_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
-                detail="Personagem não encontrado"
+                detail="Personagem não encontrado ou não autorizado"
             )
         return None
     except HTTPException:
