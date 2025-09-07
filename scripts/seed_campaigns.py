@@ -1,78 +1,38 @@
-from typing import List, Optional
+"""
+Script para popular o banco de dados com as campanhas dos capítulos 1, 2 e 3
+Uso: python scripts/seed_campaigns.py
+"""
+
+import sys
+from pathlib import Path
 from datetime import datetime
-from bson import ObjectId
-from pymongo.database import Database
-from app.models.campaign import Campaign
-from app.schemas.campaign import CampaignCreate, CampaignOut, CampaignUpdate
+
+sys.path.append(str(Path(__file__).parent.parent))
+
+from app.core.database import get_database
 
 
-class CampaignService:
-    def __init__(self, db: Database):
-        self.db = db
-        self.collection = db["campaigns"]
-
-    async def create_campaign(self, campaign_data: CampaignCreate) -> CampaignOut:
-        """Cria uma nova campanha"""
-        campaign_dict = campaign_data.dict()
-        campaign_dict["created_at"] = datetime.now()
-        campaign_dict["updated_at"] = datetime.now()
-        
-        existing = self.collection.find_one({"campaign_id": campaign_data.campaign_id})
-        if existing:
-            raise ValueError(f"Campanha com ID {campaign_data.campaign_id} já existe")
-        
-        result = self.collection.insert_one(campaign_dict)
-        campaign_dict["id"] = str(result.inserted_id)
-        
-        return CampaignOut(**campaign_dict)
-
-    async def get_campaigns(self) -> List[CampaignOut]:
-        """Retorna todas as campanhas ordenadas por capítulo"""
-        campaigns = []
-        cursor = self.collection.find().sort("chapter", 1)
-        
-        for doc in cursor:
-            doc["id"] = str(doc["_id"])
-            campaigns.append(CampaignOut(**doc))
-        
-        return campaigns
-
-    async def get_campaign_by_id(self, campaign_id: str) -> Optional[CampaignOut]:
-        """Busca uma campanha pelo campaign_id"""
-        doc = self.collection.find_one({"campaign_id": campaign_id})
-        
-        if doc:
-            doc["id"] = str(doc["_id"])
-            return CampaignOut(**doc)
-        
-        return None
-
-    async def update_campaign(self, campaign_id: str, update_data: CampaignUpdate) -> Optional[CampaignOut]:
-        """Atualiza uma campanha"""
-        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
-        
-        if update_dict:
-            update_dict["updated_at"] = datetime.now()
-            
-            result = self.collection.update_one(
-                {"campaign_id": campaign_id},
-                {"$set": update_dict}
-            )
-            
-            if result.modified_count:
-                return await self.get_campaign_by_id(campaign_id)
-        
-        return None
-
-    async def delete_campaign(self, campaign_id: str) -> bool:
-        """Remove uma campanha"""
-        result = self.collection.delete_one({"campaign_id": campaign_id})
-        return result.deleted_count > 0
-
-    async def seed_campaigns(self) -> List[CampaignOut]:
-        """Popula o banco com as campanhas dos capítulos 1, 2 e 3"""
-        
-        self.collection.delete_many({})
+def main():
+    print("RPG Chromance - Seed de Campanhas")
+    print("=" * 50)
+    
+    db = get_database()
+    campaigns_collection = db["campaigns"]
+    
+    print("\n ATENÇÃO: Este script irá:")
+    print("  1. REMOVER todas as campanhas existentes")
+    print("  2. Adicionar as campanhas dos capítulos 1, 2 e 3")
+    
+    response = input("\nDeseja continuar? (s/N): ")
+    
+    if response.lower() != 's':
+        print("Operação cancelada")
+        return 1
+    
+    print("\nPopulando banco de dados...")
+    
+    try:
+        campaigns_collection.delete_many({})
         
         campaigns_data = [
             {
@@ -89,7 +49,9 @@ class CampaignService:
                     {"type": "health", "name": "Vida +100", "icon": "heart"},
                     {"type": "tech", "name": "Chip de Combate", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             },
             {
                 "campaign_id": "laboratorio-cristais",
@@ -105,7 +67,9 @@ class CampaignService:
                     {"type": "health", "name": "Poção Vital", "icon": "heart"},
                     {"type": "tech", "name": "Cristal Energético", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             },
             {
                 "campaign_id": "coliseu-de-neon",
@@ -121,15 +85,31 @@ class CampaignService:
                     {"type": "health", "name": "Elixir da Vida", "icon": "heart"},
                     {"type": "tech", "name": "Núcleo de Energia", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             }
         ]
         
-        created_campaigns = []
-        for campaign_data in campaigns_data:
-            campaign = CampaignCreate(**campaign_data)
-            created = await self.create_campaign(campaign)
-            created_campaigns.append(created)
-            print(f" Campanha '{campaign_data['title']}' criada com sucesso!")
+        result = campaigns_collection.insert_many(campaigns_data)
         
-        return created_campaigns
+        print("\nSucesso! Campanhas criadas:")
+        print("-" * 50)
+        
+        for campaign in campaigns_data:
+            print(f"  📖 {campaign['title']}")
+            print(f"     ID: {campaign['campaign_id']}")
+            print()
+        
+        print(f"Total de campanhas criadas: {len(result.inserted_ids)}")
+        
+    except Exception as e:
+        print(f"\nErro ao popular banco: {e}")
+        return 1
+    
+    return 0
+
+
+if __name__ == "__main__":
+    exit_code = main()
+    sys.exit(exit_code)
