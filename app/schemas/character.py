@@ -2,20 +2,18 @@ from typing import Optional, Dict
 from datetime import datetime
 from pydantic import BaseModel, Field, validator
 
-
 class Atributos(BaseModel):
     """Schema para os atributos do personagem"""
+    vida: int = Field(ge=8, le=20, default=10)
+    energia: int = Field(ge=8, le=20, default=10)
     forca: int = Field(ge=8, le=20, default=10)
-    destreza: int = Field(ge=8, le=20, default=10)
     inteligencia: int = Field(ge=8, le=20, default=10)
-    carisma: int = Field(ge=8, le=20, default=10)
     
     @validator('*')
     def validate_attribute_range(cls, v):
         if not 8 <= v <= 20:
             raise ValueError('Atributo deve estar entre 8 e 20')
         return v
-
 
 class CharacterCreate(BaseModel):
     """Schema para criar um personagem - corresponde ao frontend"""
@@ -34,11 +32,10 @@ class CharacterCreate(BaseModel):
     
     @validator('atributos')
     def validate_total_points(cls, v):
-        total = v.forca + v.destreza + v.inteligencia + v.carisma
+        total = v.vida + v.energia + v.forca + v.inteligencia
         if total > 52:
             raise ValueError(f'Total de pontos ({total}) excede o máximo permitido (52)')
         return v
-
 
 class CharacterUpdate(BaseModel):
     """Schema para atualizar um personagem"""
@@ -48,7 +45,6 @@ class CharacterUpdate(BaseModel):
     descricao: Optional[str] = None
     atributos: Optional[Atributos] = None
     imageUrl: Optional[str] = None
-
 
 class CharacterResponse(BaseModel):
     """Schema de resposta do personagem"""
@@ -69,10 +65,10 @@ class CharacterResponse(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-
 class CharacterListResponse(BaseModel):
     """Schema para listagem de personagens"""
     characters: list[CharacterResponse]
     total: int
     page: int = 1
     limit: int = 10
+    pages: int = 1
