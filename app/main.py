@@ -1,6 +1,5 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
-
 from app.api.auth import router as auth_router
 from app.api.campaigns import router as camp_router
 from app.api.characters import router as chars_router
@@ -21,12 +20,10 @@ app.include_router(auth_router)
 app.include_router(chars_router)
 app.include_router(camp_router)
 
-
 # endpoints de saúde
 @app.get("/liveness", include_in_schema=False)
 async def liveness():
     return {"status": "alive"}
-
 
 @app.get("/readiness", include_in_schema=False)
 async def readiness():
@@ -43,7 +40,6 @@ async def readiness():
                 "detail": str(e)[:120],
             },
         )
-
 
 @app.get("/health", tags=["Infra"])
 async def health():
