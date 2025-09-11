@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, validator, Field, ConfigDict
 from typing import Optional
+from datetime import datetime
 import re
 
 class SignupRequest(BaseModel):
@@ -37,6 +38,7 @@ class UserOut(BaseModel):
     id: str
     nome: str
     email: str
+    created_at: datetime
 
 class UpdateProfileRequest(BaseModel):
     """Schema para atualização de perfil do usuário"""

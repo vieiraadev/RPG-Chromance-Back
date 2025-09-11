@@ -148,7 +148,7 @@ async def get_user_profile(current_user_id: str = Depends(get_current_user)):
                 detail="Usuário não encontrado"
             )
         
-        return UserOut(id=user.id, nome=user.nome, email=user.email)
+        return UserOut(id=user.id, nome=user.nome, email=user.email, created_at=user.created_at)
         
     except HTTPException:
         raise
@@ -186,7 +186,7 @@ async def update_user_profile(
             )
         
         logger.info(f"Perfil atualizado com sucesso: {updated_user.email}")
-        return UserOut(id=updated_user.id, nome=updated_user.nome, email=updated_user.email)
+        return UserOut(id=updated_user.id, nome=updated_user.nome, email=updated_user.email, created_at=updated_user.created_at)
         
     except HTTPException:
         raise
