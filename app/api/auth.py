@@ -8,7 +8,8 @@ from app.schemas.auth import (
     SignupRequest, 
     TokenResponse, 
     RefreshTokenRequest,
-    UserOut
+    UserOut,
+    UpdateProfileRequest
 )
 from app.services.auth_service import AuthService
 
@@ -153,6 +154,44 @@ async def get_user_profile(current_user_id: str = Depends(get_current_user)):
         raise
     except Exception as e:
         logger.error(f"Erro inesperado ao buscar perfil: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno do servidor"
+        )
+
+@router.put(
+    "/profile", 
+    response_model=UserOut, 
+    summary="Atualizar dados do usuário autenticado"
+)
+async def update_user_profile(
+    update_data: UpdateProfileRequest,
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    Endpoint para atualizar dados do usuário atual:
+    - Verifica token válido
+    - Permite alterar nome, email e senha
+    - Valida se novo email não está em uso por outro usuário
+    - Retorna dados atualizados
+    """
+    try:
+        updated_user = await auth_service.update_user_profile(current_user_id, update_data)
+        
+        if not updated_user:
+            logger.warning(f"Falha ao atualizar usuário: {current_user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não foi possível atualizar o perfil"
+            )
+        
+        logger.info(f"Perfil atualizado com sucesso: {updated_user.email}")
+        return UserOut(id=updated_user.id, nome=updated_user.nome, email=updated_user.email)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro inesperado ao atualizar perfil: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro interno do servidor"

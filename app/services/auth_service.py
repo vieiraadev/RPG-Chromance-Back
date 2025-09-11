@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 from typing import Optional
 from fastapi import HTTPException, status
 from app.core.security import (
@@ -7,11 +7,12 @@ from app.core.security import (
     create_access_token, 
     create_refresh_token,
     verify_password, 
-    SecurityService
+    SecurityService,
+    get_password_hash
 )
 from app.models.user import UserResponse
 from app.repositories.user_repo import UserRepository
-from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse
+from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse, UpdateProfileRequest
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,61 @@ class AuthService:
         except Exception as e:
             logger.error(f"Erro ao buscar usuário atual: {e}")
             return None
+
+    async def update_user_profile(self, user_id: str, update_data: UpdateProfileRequest) -> Optional[UserResponse]:
+        """Atualiza dados do perfil do usuário com validações de segurança"""
+        try:
+            validated_email = self.security.validate_email_format(update_data.email)
+            validated_nome = self.security.validate_name(update_data.nome)
+            
+            current_user = await self.user_repo.get_user_by_id(user_id)
+            if not current_user or not current_user.ativo:
+                logger.warning(f"Tentativa de atualização de usuário inexistente/inativo: {user_id}")
+                return None
+            
+            if validated_email != current_user.email:
+                existing_user = await self.user_repo.get_user_by_email(validated_email)
+                if existing_user and str(existing_user.get("_id")) != user_id:
+                    logger.warning(f"Tentativa de atualização com email já em uso: {validated_email}")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Este email já está sendo usado por outro usuário"
+                    )
+
+            update_fields = {
+                "nome": validated_nome,
+                "email": validated_email,
+                "updated_at": datetime.now(timezone.utc)
+            }
+            
+            if update_data.senha:
+                if len(update_data.senha) < 6:
+                    raise ValueError("Senha deve ter pelo menos 6 caracteres")
+                update_fields["senha_hash"] = get_password_hash(update_data.senha)
+            
+            updated_user = await self.user_repo.update_user(user_id, update_fields)
+            
+            if updated_user:
+                logger.info(f"Perfil atualizado com sucesso: {validated_email}")
+                return updated_user
+            else:
+                logger.error(f"Falha ao atualizar usuário no banco: {user_id}")
+                return None
+                
+        except HTTPException:
+            raise
+        except ValueError as e:
+            logger.error(f"Erro de validação na atualização: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        except Exception as e:
+            logger.error(f"Erro interno na atualização de perfil: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro interno do servidor"
+            )
 
     async def refresh_access_token(self, refresh_token: str) -> TokenResponse:
         """Renova token de acesso usando refresh token"""

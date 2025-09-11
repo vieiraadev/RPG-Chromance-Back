@@ -1,16 +1,13 @@
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
-
 from app.core.database import get_database
 from app.core.security import get_password_hash
 from app.models.user import UserModel, UserResponse
 
 logger = logging.getLogger(__name__)
-
 
 class UserRepository:
     def __init__(self):
@@ -23,9 +20,8 @@ class UserRepository:
         try:
             if await self.get_user_by_email(email):
                 raise ValueError("Email já está em uso")
-
+            
             senha_hash = get_password_hash(senha)
-
             user_data = {
                 "nome": nome,
                 "email": email,
@@ -34,13 +30,11 @@ class UserRepository:
                 "updated_at": datetime.now(timezone.utc),
                 "ativo": True,
             }
-
+            
             result = self.collection.insert_one(user_data)
-
             user = self.collection.find_one({"_id": result.inserted_id})
-
             return self._user_document_to_response(user)
-
+            
         except DuplicateKeyError:
             raise ValueError("Email já está em uso")
         except Exception as e:
@@ -59,6 +53,33 @@ class UserRepository:
                 return self._user_document_to_response(user)
             return None
         except Exception:
+            return None
+
+    async def update_user(self, user_id: str, update_fields: Dict[str, Any]) -> Optional[UserResponse]:
+        """Atualiza dados do usuário no banco de dados"""
+        try:
+            object_id = ObjectId(user_id)
+            
+            result = self.collection.update_one(
+                {"_id": object_id, "ativo": True},
+                {"$set": update_fields}
+            )
+            
+            if result.modified_count == 0:
+                logger.warning(f"Nenhum documento foi atualizado para user_id: {user_id}")
+                return None
+
+            updated_user_doc = self.collection.find_one(
+                {"_id": object_id, "ativo": True}
+            )
+            
+            if updated_user_doc:
+                return self._user_document_to_response(updated_user_doc)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao atualizar usuário {user_id}: {e}")
             return None
 
     def _user_document_to_response(self, user_doc: Dict[str, Any]) -> UserResponse:
