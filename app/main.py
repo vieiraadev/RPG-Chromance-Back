@@ -1,15 +1,17 @@
+# main.py - IMPORT CORRIGIDO
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from app.api.auth import router as auth_router
 from app.api.campaigns import router as camp_router
 from app.api.characters import router as chars_router
+from app.api.llm import router as llm_router  # NOVA IMPORTAÇÃO
 from app.core.database import get_db, mongodb
 from app.core.middleware import setup_middlewares
 
 app = FastAPI(
     title="RPG Chromance API — Cyberpunk",
     version="0.1.0",
-    description="Contrato inicial (Auth, Personagem, Campanha, Histórico e Ação).",
+    description="Contrato inicial (Auth, Personagem, Campanha, Histórico, Ação e LLM).",  
 )
 
 # aplica middlewares (CORS)
@@ -19,8 +21,8 @@ setup_middlewares(app)
 app.include_router(auth_router)
 app.include_router(chars_router)
 app.include_router(camp_router)
+app.include_router(llm_router) 
 
-# endpoints de saúde
 @app.get("/liveness", include_in_schema=False)
 async def liveness():
     return {"status": "alive"}
@@ -46,9 +48,20 @@ async def health():
     try:
         db = get_db()
         await db.command("ping")
-        return {"ok": True, "db": "ok"}
+        from app.config import OPENAI_API_KEY 
+        llm_status = "ok" if OPENAI_API_KEY else "not_configured"
+        
+        return {
+            "ok": True, 
+            "db": "ok",
+            "llm": llm_status 
+        }
     except Exception:
         return JSONResponse(
             status_code=503,
-            content={"ok": False, "db": "fail"},
+            content={
+                "ok": False, 
+                "db": "fail",
+                "llm": "unknown" 
+            },
         )
