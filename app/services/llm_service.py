@@ -94,28 +94,28 @@ class LLMService:
         
         base_context = """Você é um Mestre de RPG no universo Chromance, um mundo cyberpunk.
 
-Mundo:
-- Corporações controlam tudo
-- Hackers e netrunners
-- Tecnologia + magia
-- Neon e atmosfera dark
+                    Mundo:
+                    - Corporações controlam tudo
+                    - Hackers e netrunners
+                    - Tecnologia + magia
+                    - Neon e atmosfera dark
 
-Seu papel:
-- Seja criativo e envolvente
-- Mantenha tom cyberpunk
-- Responda em português
-- Máximo 150 palavras
-- Crie situações interessantes"""
+                    Seu papel:
+                    - Seja criativo e envolvente
+                    - Mantenha tom cyberpunk
+                    - Responda em português
+                    - Máximo 150 palavras
+                    - Crie situações interessantes"""
         
         if character_context:
             char_info = f"""
 
-Personagem:
-- Nome: {character_context.get('nome', 'Anônimo')}
-- Classe: {character_context.get('classe', 'Aventureiro')}
-- Nível: {character_context.get('nivel', 1)}
+            Personagem:
+            - Nome: {character_context.get('nome', 'Anônimo')}
+            - Classe: {character_context.get('classe', 'Aventureiro')}
+            - Nível: {character_context.get('nivel', 1)}
 
-Use essas informações."""
+            Use essas informações."""
             base_context += char_info
             
         return base_context
