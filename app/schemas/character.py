@@ -45,6 +45,7 @@ class CharacterUpdate(BaseModel):
     descricao: Optional[str] = None
     atributos: Optional[Atributos] = None
     imageUrl: Optional[str] = None
+    is_selected: Optional[bool] = None  
 
 class CharacterResponse(BaseModel):
     """Schema de resposta do personagem"""
@@ -56,7 +57,9 @@ class CharacterResponse(BaseModel):
     atributos: Dict[str, int]
     imageUrl: str
     user_id: Optional[str] = None
+    is_selected: bool = False  
     created_at: datetime
+    updated_at: Optional[datetime] = None  
     active: bool = True
     
     class Config:

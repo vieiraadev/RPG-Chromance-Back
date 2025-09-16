@@ -3,17 +3,17 @@ from typing import Optional, Dict
 from pydantic import BaseModel, Field
 from bson import ObjectId
 
-
 class CharacterModel(BaseModel):
     """Modelo de dados do personagem no MongoDB"""
     id: Optional[str] = Field(None, alias="_id")
-    name: str 
+    name: str
     raca: str
     classe: str
     descricao: Optional[str] = ""
-    atributos: Dict[str, int] 
+    atributos: Dict[str, int]
     imageUrl: str = "assets/images/default-avatar.png"
     user_id: Optional[str] = None
+    is_selected: bool = False 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     active: bool = True
     

@@ -28,9 +28,7 @@ async def create_character(
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user)
 ):
-    """
-    Cria um novo personagem para o usuário autenticado
-    """
+    """Cria um novo personagem para o usuário autenticado"""
     try:
         character = await service.create_character(character_data, current_user_id)
         return character
@@ -47,12 +45,51 @@ async def list_characters(
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user) 
 ):
-    """
-    Lista apenas os personagens do usuário autenticado
-    """
+    """Lista apenas os personagens do usuário autenticado"""
     try:
         result = await service.list_characters(current_user_id, page, limit)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/selected", response_model=CharacterResponse)
+async def get_selected_character(
+    service: CharacterService = Depends(get_character_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Busca o personagem atualmente selecionado do usuário"""
+    try:
+        character = await service.get_selected_character(current_user_id)
+        if not character:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Nenhum personagem selecionado"
+            )
+        return character
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/{character_id}/select", response_model=CharacterResponse)
+async def select_character(
+    character_id: str,
+    service: CharacterService = Depends(get_character_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Seleciona um personagem específico"""
+    try:
+        character = await service.select_character(character_id, current_user_id)
+        if not character:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Personagem não encontrado ou não autorizado"
+            )
+        return character
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -63,9 +100,7 @@ async def get_character(
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user) 
 ):
-    """
-    Busca um personagem específico 
-    """
+    """Busca um personagem específico"""
     try:
         character = await service.get_character(character_id, current_user_id)
         if not character:
@@ -87,9 +122,7 @@ async def update_character(
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user)
 ):
-    """
-    Atualiza um personagem
-    """
+    """Atualiza um personagem"""
     try:
         character = await service.update_character(character_id, update_data, current_user_id)
         if not character:
@@ -112,9 +145,7 @@ async def delete_character(
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user)
 ):
-    """
-    Remove um personagem
-    """
+    """Remove um personagem"""
     try:
         success = await service.delete_character(character_id, current_user_id)
         if not success:

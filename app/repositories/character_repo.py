@@ -19,7 +19,9 @@ class CharacterRepository:
         try:
             self.collection.create_index("user_id")
             self.collection.create_index("active")
+            self.collection.create_index("is_selected") 
             self.collection.create_index([("user_id", 1), ("active", -1)])
+            self.collection.create_index([("user_id", 1), ("is_selected", -1)]) 
         except Exception as e:
             print(f"Erro ao criar índices: {e}")
     
@@ -29,6 +31,7 @@ class CharacterRepository:
             character_data["user_id"] = user_id
             character_data["created_at"] = datetime.utcnow()
             character_data["active"] = True
+            character_data["is_selected"] = False 
             
             if hasattr(character_data.get("atributos"), "dict"):
                 character_data["atributos"] = character_data["atributos"].dict()
@@ -137,3 +140,68 @@ class CharacterRepository:
             
         except Exception:
             return 0
+
+    async def unselect_all_characters(self, user_id: str = None) -> bool:
+        """Desmarca todos os personagens do usuário como não selecionados"""
+        try:
+            filter_dict = {"active": True}
+            if user_id:
+                filter_dict["user_id"] = user_id
+                
+            result = self.collection.update_many(
+                filter_dict,
+                {"$set": {"is_selected": False, "updated_at": datetime.utcnow()}}
+            )
+            return True
+        except Exception as e:
+            print(f"Erro ao desmarcar personagens: {e}")
+            return False
+
+    async def get_selected_character(self, user_id: str = None) -> Optional[CharacterModel]:
+        """Busca o personagem atualmente selecionado do usuário"""
+        try:
+            filter_dict = {"active": True, "is_selected": True}
+            if user_id:
+                filter_dict["user_id"] = user_id
+                
+            document = self.collection.find_one(filter_dict)
+            if document:
+                return CharacterModel.from_mongo(document)
+            return None
+        except Exception as e:
+            print(f"Erro ao buscar personagem selecionado: {e}")
+            return None
+
+    async def select_character_by_id(self, character_id: str, user_id: str = None) -> Optional[CharacterModel]:
+        """Seleciona um personagem específico por ID (método auxiliar)"""
+        try:
+            query = {"_id": ObjectId(character_id), "active": True}
+            if user_id:
+                query["user_id"] = user_id
+            
+            result = self.collection.find_one_and_update(
+                query,
+                {"$set": {"is_selected": True, "updated_at": datetime.utcnow()}},
+                return_document=True
+            )
+            
+            if result:
+                return CharacterModel.from_mongo(result)
+            return None
+            
+        except Exception as e:
+            print(f"Erro ao selecionar personagem: {e}")
+            return None
+
+    async def has_selected_character(self, user_id: str = None) -> bool:
+        """Verifica se o usuário já tem um personagem selecionado"""
+        try:
+            filter_dict = {"active": True, "is_selected": True}
+            if user_id:
+                filter_dict["user_id"] = user_id
+                
+            count = self.collection.count_documents(filter_dict)
+            return count > 0
+        except Exception as e:
+            print(f"Erro ao verificar personagem selecionado: {e}")
+            return False
