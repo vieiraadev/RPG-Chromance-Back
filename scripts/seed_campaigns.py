@@ -1,5 +1,8 @@
 """
-Script para popular o banco de dados com as campanhas dos capítulos 1, 2 e 3
+Script para popular o banco de dados com as campanhas BASE (globais)
+As campanhas são fixas e aparecem para todos os usuários.
+O progresso é individual por usuário.
+
 Uso: python scripts/seed_campaigns.py
 """
 
@@ -13,15 +16,17 @@ from app.core.database import get_database
 
 
 def main():
-    print("RPG Chromance - Seed de Campanhas")
+    print("RPG Chromance - Seed de Campanhas Base")
     print("=" * 50)
     
     db = get_database()
     campaigns_collection = db["campaigns"]
+    progress_collection = db["campaign_progress"]
     
-    print("\n ATENÇÃO: Este script irá:")
-    print("  1. REMOVER todas as campanhas existentes")
-    print("  2. Adicionar as campanhas dos capítulos 1, 2 e 3")
+    print("\n⚠ ATENÇÃO: Este script irá:")
+    print("  1. REMOVER todas as campanhas BASE (globais)")
+    print("  2. Adicionar as 3 campanhas base do jogo")
+    print("  3. O progresso dos usuários será MANTIDO")
     
     response = input("\nDeseja continuar? (s/N): ")
     
@@ -32,7 +37,8 @@ def main():
     print("\nPopulando banco de dados...")
     
     try:
-        campaigns_collection.delete_many({})
+        result = campaigns_collection.delete_many({"user_id": None})
+        print(f"  Removidas {result.deleted_count} campanhas base")
         
         campaigns_data = [
             {
@@ -50,6 +56,8 @@ def main():
                     {"type": "tech", "name": "Chip de Combate", "icon": "chip"}
                 ],
                 "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
             },
@@ -68,6 +76,8 @@ def main():
                     {"type": "tech", "name": "Cristal Energético", "icon": "chip"}
                 ],
                 "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
             },
@@ -86,14 +96,17 @@ def main():
                     {"type": "tech", "name": "Núcleo de Energia", "icon": "chip"}
                 ],
                 "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
             }
         ]
         
+
         result = campaigns_collection.insert_many(campaigns_data)
         
-        print("\nSucesso! Campanhas criadas:")
+        print("\n✓ Sucesso! Campanhas BASE criadas:")
         print("-" * 50)
         
         for campaign in campaigns_data:
@@ -103,9 +116,26 @@ def main():
         
         print(f"Total de campanhas criadas: {len(result.inserted_ids)}")
         
+
+        print("\n📊 Estatísticas do banco:")
+        total_campaigns = campaigns_collection.count_documents({})
+        total_progress = progress_collection.count_documents({})
+        active_campaigns = progress_collection.count_documents({"status": "in_progress"})
+        
+        print(f"  Campanhas base (globais): {total_campaigns}")
+        print(f"  Registros de progresso: {total_progress}")
+        print(f"  Campanhas em andamento: {active_campaigns}")
+        
+        users_with_progress = progress_collection.distinct("user_id")
+        if users_with_progress:
+            print(f"\n👥 Usuários com progresso salvo: {len(users_with_progress)}")
+        
     except Exception as e:
-        print(f"\nErro ao popular banco: {e}")
+        print(f"\n✗ Erro ao popular banco: {e}")
         return 1
+    
+    print("\n✨ Pronto! As campanhas base estão disponíveis para todos os usuários.")
+    print("   Cada usuário terá seu próprio progresso ao iniciar uma campanha.")
     
     return 0
 

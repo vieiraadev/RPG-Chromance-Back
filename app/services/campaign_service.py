@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from bson import ObjectId
 from pymongo.database import Database
@@ -9,70 +9,179 @@ from app.schemas.campaign import CampaignCreate, CampaignOut, CampaignUpdate
 class CampaignService:
     def __init__(self, db: Database):
         self.db = db
-        self.collection = db["campaigns"]
+        self.campaigns_collection = db["campaigns"]
+        self.progress_collection = db["campaign_progress"]
 
-    async def create_campaign(self, campaign_data: CampaignCreate) -> CampaignOut:
-        """Cria uma nova campanha"""
-        campaign_dict = campaign_data.dict()
-        campaign_dict["created_at"] = datetime.now()
-        campaign_dict["updated_at"] = datetime.now()
-        
-        existing = self.collection.find_one({"campaign_id": campaign_data.campaign_id})
-        if existing:
-            raise ValueError(f"Campanha com ID {campaign_data.campaign_id} já existe")
-        
-        result = self.collection.insert_one(campaign_dict)
-        campaign_dict["id"] = str(result.inserted_id)
-        
-        return CampaignOut(**campaign_dict)
-
-    async def get_campaigns(self) -> List[CampaignOut]:
-        """Retorna todas as campanhas ordenadas por capítulo"""
+    async def get_campaigns_with_progress(self, user_id: str = None) -> List[Dict]:
+        """Retorna todas as campanhas base com o progresso do usuário mesclado"""
         campaigns = []
-        cursor = self.collection.find().sort("chapter", 1)
+        
+        cursor = self.campaigns_collection.find({"user_id": None}).sort("chapter", 1)
         
         for doc in cursor:
-            doc["id"] = str(doc["_id"])
+            doc["_id"] = str(doc["_id"])
+            doc["id"] = doc["_id"]
+            
+            if user_id:
+                progress = self.progress_collection.find_one({
+                    "user_id": user_id,
+                    "campaign_id": doc["campaign_id"]
+                })
+                
+                if progress:
+                    doc["status"] = progress.get("status", None)
+                    doc["active_character_id"] = progress.get("active_character_id", None)
+                    doc["active_character_name"] = progress.get("active_character_name", None)
+                    doc["current_chapter"] = progress.get("current_chapter", 1)
+                    doc["chapters_completed"] = progress.get("chapters_completed", [])
+                    doc["started_at"] = progress.get("started_at", None)
+                    doc["last_played_at"] = progress.get("last_played_at", None)
+                    doc["score"] = progress.get("score", 0)
+                    doc["battles_won"] = progress.get("battles_won", 0)
+                    doc["battles_lost"] = progress.get("battles_lost", 0)
+                else:
+                    doc["status"] = None
+                    doc["active_character_id"] = None
+                    doc["active_character_name"] = None
+                    doc["current_chapter"] = 1
+                    doc["chapters_completed"] = []
+                    doc["started_at"] = None
+                    doc["score"] = 0
+                    doc["battles_won"] = 0
+                    doc["battles_lost"] = 0
+            
             campaigns.append(CampaignOut(**doc))
         
         return campaigns
 
-    async def get_campaign_by_id(self, campaign_id: str) -> Optional[CampaignOut]:
-        """Busca uma campanha pelo campaign_id"""
-        doc = self.collection.find_one({"campaign_id": campaign_id})
+    async def get_campaigns(self, user_id: str = None) -> List[CampaignOut]:
+        """Retorna todas as campanhas com progresso do usuário se fornecido"""
+        return await self.get_campaigns_with_progress(user_id)
+
+    async def get_campaign_by_id(self, campaign_id: str, user_id: str = None) -> Optional[CampaignOut]:
+        """Busca uma campanha específica com progresso do usuário"""
+        # Busca a campanha base
+        doc = self.campaigns_collection.find_one({
+            "campaign_id": campaign_id,
+            "user_id": None 
+        })
         
-        if doc:
-            doc["id"] = str(doc["_id"])
-            return CampaignOut(**doc)
+        if not doc:
+            return None
+        
+        doc["_id"] = str(doc["_id"])
+        doc["id"] = doc["_id"]
+        
+        if user_id:
+            progress = self.progress_collection.find_one({
+                "user_id": user_id,
+                "campaign_id": campaign_id
+            })
+            
+            if progress:
+                doc["status"] = progress.get("status", None)
+                doc["active_character_id"] = progress.get("active_character_id", None)
+                doc["active_character_name"] = progress.get("active_character_name", None)
+                doc["current_chapter"] = progress.get("current_chapter", 1)
+                doc["chapters_completed"] = progress.get("chapters_completed", [])
+                doc["started_at"] = progress.get("started_at", None)
+                doc["score"] = progress.get("score", 0)
+        
+        return CampaignOut(**doc)
+
+    async def start_campaign(self, campaign_id: str, character_id: str, character_name: str, user_id: str) -> CampaignOut:
+        """Inicia uma campanha criando/atualizando o progresso do usuário"""
+
+        campaign = self.campaigns_collection.find_one({
+            "campaign_id": campaign_id,
+            "user_id": None
+        })
+        
+        if not campaign:
+            await self.seed_campaigns()
+            campaign = self.campaigns_collection.find_one({
+                "campaign_id": campaign_id,
+                "user_id": None
+            })
+        
+        if not campaign:
+            raise ValueError(f"Campanha {campaign_id} não encontrada")
+        
+        self.progress_collection.update_many(
+            {"user_id": user_id, "status": "in_progress"},
+            {"$set": {"status": "cancelled"}}
+        )
+
+        progress_data = {
+            "user_id": user_id,
+            "campaign_id": campaign_id,
+            "status": "in_progress",
+            "active_character_id": character_id,
+            "active_character_name": character_name,
+            "current_chapter": 1,
+            "chapters_completed": [],
+            "score": 0,
+            "battles_won": 0,
+            "battles_lost": 0,
+            "items_collected": [],
+            "started_at": datetime.now(),
+            "last_played_at": datetime.now()
+        }
+
+        self.progress_collection.update_one(
+            {"user_id": user_id, "campaign_id": campaign_id},
+            {"$set": progress_data},
+            upsert=True
+        )
+        
+        return await self.get_campaign_by_id(campaign_id, user_id)
+
+    async def get_active_campaign(self, user_id: str) -> Optional[CampaignOut]:
+        """Retorna a campanha ativa do usuário"""
+        progress = self.progress_collection.find_one({
+            "user_id": user_id,
+            "status": "in_progress"
+        })
+        
+        if not progress:
+            return None
+        
+        return await self.get_campaign_by_id(progress["campaign_id"], user_id)
+
+    async def complete_chapter(self, campaign_id: str, chapter: int, user_id: str) -> Optional[CampaignOut]:
+        """Marca um capítulo como completo no progresso do usuário"""
+        result = self.progress_collection.update_one(
+            {"user_id": user_id, "campaign_id": campaign_id},
+            {
+                "$addToSet": {"chapters_completed": chapter},
+                "$set": {
+                    "current_chapter": chapter + 1,
+                    "last_played_at": datetime.now()
+                }
+            }
+        )
+        
+        if result.modified_count:
+            return await self.get_campaign_by_id(campaign_id, user_id)
         
         return None
 
-    async def update_campaign(self, campaign_id: str, update_data: CampaignUpdate) -> Optional[CampaignOut]:
-        """Atualiza uma campanha"""
-        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
-        
-        if update_dict:
-            update_dict["updated_at"] = datetime.now()
-            
-            result = self.collection.update_one(
-                {"campaign_id": campaign_id},
-                {"$set": update_dict}
-            )
-            
-            if result.modified_count:
-                return await self.get_campaign_by_id(campaign_id)
-        
-        return None
-
-    async def delete_campaign(self, campaign_id: str) -> bool:
-        """Remove uma campanha"""
-        result = self.collection.delete_one({"campaign_id": campaign_id})
-        return result.deleted_count > 0
+    async def update_battle_stats(self, campaign_id: str, user_id: str, won: bool) -> bool:
+        """Atualiza estatísticas de batalha"""
+        field = "battles_won" if won else "battles_lost"
+        result = self.progress_collection.update_one(
+            {"user_id": user_id, "campaign_id": campaign_id},
+            {
+                "$inc": {field: 1, "score": 10 if won else -5},
+                "$set": {"last_played_at": datetime.now()}
+            }
+        )
+        return result.modified_count > 0
 
     async def seed_campaigns(self) -> List[CampaignOut]:
-        """Popula o banco com as campanhas dos capítulos 1, 2 e 3"""
+        """Cria as campanhas base (globais) no banco"""
         
-        self.collection.delete_many({})
+        self.campaigns_collection.delete_many({"user_id": None})
         
         campaigns_data = [
             {
@@ -80,7 +189,7 @@ class CampaignService:
                 "title": "Capítulo 1 : O Cubo das Sombras",
                 "chapter": 1,
                 "description": "Nas profundezas de uma catedral em ruínas, o guerreiro sombrio encontra a Relíquia Perdida — um cubo pulsante de energia ancestral.",
-                "full_description": "Nas profundezas de uma catedral em ruínas, o guerreiro sombrio encontra a Relíquia Perdida — um cubo pulsante de energia ancestral. Para conquistá-lo, deve enfrentar as armadilhas ocultas que protegem seu poder e resistir à corrupção que emana da própria relíquia. Cada passo ecoa no salão silencioso, enquanto a luz azul da espada e do artefato guia seu caminho através da escuridão. O destino do mundo depende de sua escolha: dominar o cubo ou ser consumido por ele.",
+                "full_description": "Nas profundezas de uma catedral em ruínas, o guerreiro sombrio encontra a Relíquia Perdida — um cubo pulsante de energia ancestral. Para conquistá-lo, deve enfrentar as armadilhas ocultas que protegem seu poder e resistir à corrupção que emana da própria relíquia.",
                 "image": "./assets/images/campaign-thumb1.jpg",
                 "thumbnail": "./assets/images/campaign-thumb1.jpg",
                 "rewards": [
@@ -89,14 +198,18 @@ class CampaignService:
                     {"type": "health", "name": "Vida +100", "icon": "heart"},
                     {"type": "tech", "name": "Chip de Combate", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             },
             {
                 "campaign_id": "laboratorio-cristais",
                 "title": "Capítulo 2 : Laboratório de Cristais Arcanos",
                 "chapter": 2,
-                "description": "Em um laboratório oculto nas profundezas da fortaleza inimiga, um cientista obcecado conduz experiências proibidas com fragmentos de energia arcana.",
-                "full_description": "Em um laboratório oculto nas profundezas da fortaleza inimiga, um cientista obcecado conduz experiências proibidas com fragmentos de energia arcana. Sua última criação gerou uma reação instável, transformando o local em um campo de chamas e caos. O jogador deve atravessar o laboratório em colapso, evitando explosões e defendendo-se das máquinas de defesa ativadas pelo surto de energia.",
+                "description": "Em um laboratório oculto nas profundezas da fortaleza inimiga, um cientista obcecado conduz experiências proibidas.",
+                "full_description": "Em um laboratório oculto nas profundezas da fortaleza inimiga, um cientista obcecado conduz experiências proibidas com fragmentos de energia arcana.",
                 "image": "./assets/images/campaign-thumb2.jpg",
                 "thumbnail": "./assets/images/campaign-thumb2.jpg",
                 "rewards": [
@@ -105,14 +218,18 @@ class CampaignService:
                     {"type": "health", "name": "Poção Vital", "icon": "heart"},
                     {"type": "tech", "name": "Cristal Energético", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             },
             {
                 "campaign_id": "coliseu-de-neon",
                 "title": "Capítulo 3 : Coliseu de Neon",
                 "chapter": 3,
-                "description": "No coração da cidade subterrânea, em um beco cercado por prédios decadentes e iluminado apenas por letreiros de neon.",
-                "full_description": "No coração da cidade subterrânea, em um beco cercado por prédios decadentes e iluminado apenas por letreiros de neon, ocorre o torneio clandestino mais brutal do submundo. Aqui, guerreiros e máquinas se enfrentam em lutas sangrentas, enquanto a multidão mascarada assiste em êxtase.",
+                "description": "No coração da cidade subterrânea, em um beco cercado por prédios decadentes.",
+                "full_description": "No coração da cidade subterrânea, em um beco cercado por prédios decadentes e iluminado apenas por letreiros de neon.",
                 "image": "./assets/images/campaign-image3.jpg",
                 "thumbnail": "./assets/images/campaign-image3.jpg",
                 "rewards": [
@@ -121,15 +238,15 @@ class CampaignService:
                     {"type": "health", "name": "Elixir da Vida", "icon": "heart"},
                     {"type": "tech", "name": "Núcleo de Energia", "icon": "chip"}
                 ],
-                "is_locked": False
+                "is_locked": False,
+                "user_id": None,
+                "chapters_completed": [],
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             }
         ]
         
-        created_campaigns = []
-        for campaign_data in campaigns_data:
-            campaign = CampaignCreate(**campaign_data)
-            created = await self.create_campaign(campaign)
-            created_campaigns.append(created)
-            print(f" Campanha '{campaign_data['title']}' criada com sucesso!")
-        
-        return created_campaigns
+        result = self.campaigns_collection.insert_many(campaigns_data)
+        print(f"✓ {len(result.inserted_ids)} campanhas base criadas!")
+
+        return await self.get_campaigns_with_progress(None)
