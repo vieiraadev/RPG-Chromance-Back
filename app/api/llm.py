@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
 from app.schemas.llm import (
-    LLMChatRequest, 
-    LLMChatResponse, 
+    LLMChatRequest,
+    LLMChatResponse,
     CharacterSuggestionRequest,
-    LLMHealthCheck
+    LLMHealthCheck,
+    ContextualAction
 )
 from app.services.llm_service import LLMService
 import logging
@@ -22,12 +23,11 @@ async def chat_with_llm(
     llm_service: LLMService = Depends(get_llm_service)
 ):
     """
-    Envia mensagem para a LLM e retorna resposta.
+    Envia mensagem para a LLM e retorna resposta com ações contextuais.
     Pode incluir contexto de personagem se character_id for fornecido.
     """
     try:
         character_context = None
-        
         # TODO: Quando integrar com characters, buscar contexto do personagem
         # if request.character_id:
         #     from app.services.character_service import CharacterService
@@ -41,21 +41,34 @@ async def chat_with_llm(
         #             "nivel": character.nivel,
         #             "descricao": character.descricao
         #         }
-        
+
         history = []
         if request.conversation_history:
             history = [
-                {"role": msg.role, "content": msg.content} 
+                {"role": msg.role, "content": msg.content}
                 for msg in request.conversation_history
             ]
+
         result = await llm_service.chat_with_llm(
             message=request.message,
             character_context=character_context,
-            conversation_history=history
+            conversation_history=history,
+            generate_actions=request.generate_actions
         )
         
-        return LLMChatResponse(**result)
-        
+        contextual_actions = []
+        if result.get("contextual_actions"):
+            for action in result["contextual_actions"]:
+                contextual_actions.append(ContextualAction(**action))
+
+        return LLMChatResponse(
+            success=result["success"],
+            response=result.get("response"),
+            contextual_actions=contextual_actions,
+            error=result.get("error"),
+            usage=result.get("usage")
+        )
+
     except Exception as e:
         logger.error(f"Erro no chat LLM: {str(e)}")
         raise HTTPException(
@@ -74,7 +87,7 @@ async def suggest_character(
     try:
         result = await llm_service.generate_character_suggestion(request.partial_data)
         return LLMChatResponse(**result)
-        
+
     except Exception as e:
         logger.error(f"Erro na sugestão de personagem: {str(e)}")
         raise HTTPException(
@@ -91,13 +104,12 @@ async def llm_health_check(
     """
     try:
         result = await llm_service.test_connection()
-        
         return LLMHealthCheck(
             status="healthy" if result["success"] else "unhealthy",
             model=result["model"],
             available=result["success"]
         )
-        
+
     except Exception as e:
         logger.error(f"Erro no health check: {str(e)}")
         return LLMHealthCheck(
