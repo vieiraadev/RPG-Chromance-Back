@@ -134,7 +134,7 @@ def main():
         print(f"\n✗ Erro ao popular banco: {e}")
         return 1
     
-    print("\n✨ Pronto! As campanhas base estão disponíveis para todos os usuários.")
+    print("\nAs campanhas base estão disponíveis para todos os usuários.")
     print("   Cada usuário terá seu próprio progresso ao iniciar uma campanha.")
     
     return 0

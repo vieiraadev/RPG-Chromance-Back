@@ -74,8 +74,10 @@ async def start_campaign(
 ):
     """Inicia uma campanha com o personagem selecionado"""
     try:
+        # Verifica se a campanha existe para este usuário
         campaign = await service.get_campaign_by_id(request.campaign_id, user_id=current_user_id)
         if not campaign:
+            # Se não existe, cria as campanhas base para o usuário
             await service.seed_campaigns(user_id=current_user_id)
             campaign = await service.get_campaign_by_id(request.campaign_id, user_id=current_user_id)
         
@@ -84,7 +86,8 @@ async def start_campaign(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Campanha não encontrada"
             )
-
+        
+        # Inicia a campanha
         updated_campaign = await service.start_campaign(
             campaign_id=request.campaign_id,
             character_id=request.character_id,
@@ -126,16 +129,12 @@ async def cancel_campaign(
     service: CampaignService = Depends(get_campaign_service)
 ):
     """Cancela uma campanha ativa"""
-    campaign = await service.update_campaign(
-        campaign_id, 
-        CampaignUpdate(status="cancelled", cancelled_at=datetime.now()),
-        user_id=current_user_id
-    )
+    success = await service.cancel_campaign(campaign_id, user_id=current_user_id)
     
-    if not campaign:
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campanha não encontrada"
+            detail="Campanha não encontrada ou não está em progresso"
         )
     
     return {

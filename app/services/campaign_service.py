@@ -60,7 +60,6 @@ class CampaignService:
 
     async def get_campaign_by_id(self, campaign_id: str, user_id: str = None) -> Optional[CampaignOut]:
         """Busca uma campanha específica com progresso do usuário"""
-        # Busca a campanha base
         doc = self.campaigns_collection.find_one({
             "campaign_id": campaign_id,
             "user_id": None 
@@ -91,7 +90,7 @@ class CampaignService:
 
     async def start_campaign(self, campaign_id: str, character_id: str, character_name: str, user_id: str) -> CampaignOut:
         """Inicia uma campanha criando/atualizando o progresso do usuário"""
-
+        
         campaign = self.campaigns_collection.find_one({
             "campaign_id": campaign_id,
             "user_id": None
@@ -111,7 +110,7 @@ class CampaignService:
             {"user_id": user_id, "status": "in_progress"},
             {"$set": {"status": "cancelled"}}
         )
-
+        
         progress_data = {
             "user_id": user_id,
             "campaign_id": campaign_id,
@@ -127,7 +126,7 @@ class CampaignService:
             "started_at": datetime.now(),
             "last_played_at": datetime.now()
         }
-
+        
         self.progress_collection.update_one(
             {"user_id": user_id, "campaign_id": campaign_id},
             {"$set": progress_data},
@@ -166,7 +165,45 @@ class CampaignService:
         
         return None
 
-    async def update_battle_stats(self, campaign_id: str, user_id: str, won: bool) -> bool:
+    async def cancel_campaign(self, campaign_id: str, user_id: str) -> bool:
+        """Cancela uma campanha ativa do usuário"""
+        result = self.progress_collection.update_one(
+            {
+                "user_id": user_id,
+                "campaign_id": campaign_id,
+                "status": "in_progress"
+            },
+            {
+                "$set": {
+                    "status": "cancelled",
+                    "cancelled_at": datetime.now()
+                }
+            }
+        )
+        return result.modified_count > 0
+
+    async def update_campaign(self, campaign_id: str, update_data: any, user_id: str = None) -> Optional[CampaignOut]:
+        """Atualiza dados de uma campanha (compatibilidade com API)"""
+        if not user_id:
+            return None
+            
+        update_dict = {}
+        if hasattr(update_data, 'status'):
+            update_dict['status'] = update_data.status
+        if hasattr(update_data, 'cancelled_at'):
+            update_dict['cancelled_at'] = update_data.cancelled_at
+            
+        if update_dict:
+            result = self.progress_collection.update_one(
+                {"user_id": user_id, "campaign_id": campaign_id},
+                {"$set": update_dict},
+                upsert=True
+            )
+            
+            if result.modified_count or result.upserted_id:
+                return await self.get_campaign_by_id(campaign_id, user_id)
+        
+        return None
         """Atualiza estatísticas de batalha"""
         field = "battles_won" if won else "battles_lost"
         result = self.progress_collection.update_one(
@@ -199,7 +236,7 @@ class CampaignService:
                     {"type": "tech", "name": "Chip de Combate", "icon": "chip"}
                 ],
                 "is_locked": False,
-                "user_id": None,
+                "user_id": None, 
                 "chapters_completed": [],
                 "created_at": datetime.now(),
                 "updated_at": datetime.now()
@@ -248,5 +285,5 @@ class CampaignService:
         
         result = self.campaigns_collection.insert_many(campaigns_data)
         print(f"✓ {len(result.inserted_ids)} campanhas base criadas!")
-
+        
         return await self.get_campaigns_with_progress(None)
