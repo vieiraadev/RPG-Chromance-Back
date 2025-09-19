@@ -9,7 +9,8 @@ O jogo utiliza **LLM** para gerar narrativas dinâmicas e estruturadas, permitin
 - **Front-end**: Angular 17+, SCSS, JWT Auth, consumo de API REST  
 - **Back-end**: FastAPI, MongoDB, Pydantic, autenticação JWT  
 - **IA/LLM**: geração de narrativa e ações, com respostas JSON estruturadas  
-- **Infra**: Healthchecks (`/liveness`, `/readiness`, `/health`)  
+- **Infra**: Healthchecks (`/liveness`, `/readiness`, `/health`)
+  
 
 ---
 
