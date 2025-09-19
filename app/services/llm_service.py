@@ -64,7 +64,7 @@ class LLMService:
                     llm_response = data["choices"][0]["message"]["content"]
                     
                     logger.info(f"Resposta completa da LLM: {llm_response}")
-
+                    
                     contextual_actions = []
                     if generate_actions:
                         contextual_actions = self._extract_actions_from_response(llm_response)
@@ -109,40 +109,47 @@ class LLMService:
         
         base_context = """Você é um Mestre de RPG no universo Chromance, um mundo cyberpunk.
 
-                    MUNDO:
-                    - Corporações controlam tudo
-                    - Hackers e netrunners
-                    - Tecnologia + magia
-                    - Neon e atmosfera dark
+                        MUNDO:
+                        - Corporações controlam tudo
+                        - Hackers e netrunners
+                        - Tecnologia + magia
+                        - Neon e atmosfera dark
 
-                    SEU PAPEL:
-                    - Seja criativo e envolvente
-                    - Mantenha tom cyberpunk
-                    - Responda em português
-                    - Máximo 120 palavras para a narrativa
-                    - Crie situações interessantes"""
+                        SEU PAPEL:
+                        - Seja criativo e envolvente
+                        - Mantenha tom cyberpunk
+                        - Responda em português
+                        - Máximo 120 palavras para a narrativa
+                        - Crie situações interessantes"""
         
         if character_context:
+            atributos_info = ""
+            if character_context.get('atributos'):
+                attrs = character_context['atributos']
+                atributos_info = f"""
+                - Atributos: Vida {attrs.get('vida', 20)}/20, Energia {attrs.get('energia', 20)}/20, Força {attrs.get('forca', 10)}/20, Inteligência {attrs.get('inteligencia', 10)}/20"""
+            
             char_info = f"""
 
-                    PERSONAGEM:
-                    - Nome: {character_context.get('nome', 'Anônimo')}
-                    - Classe: {character_context.get('classe', 'Aventureiro')}
-                    - Nível: {character_context.get('nivel', 1)}
+                        PERSONAGEM ATIVO:
+                        - Nome: {character_context.get('nome', 'Anônimo')}
+                        - Raça: {character_context.get('raca', 'Humano')}
+                        - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
+                        - Descrição: {character_context.get('descricao', 'Sem descrição')}
 
-                    Use essas informações."""
+                        IMPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
             base_context += char_info
         
         if generate_actions:
             actions_instruction = """
 
-                    AÇÕES CONTEXTUAIS:
-                    Após sua narrativa, adicione exatamente 3 ações no formato:
+                        AÇÕES CONTEXTUAIS:
+                        Após sua narrativa, adicione exatamente 3 ações no formato:
 
-                    [AÇÕES]
-                    {"actions":[{"name":"Ação 1","description":"Descrição da ação 1"},{"name":"Ação 2","description":"Descrição da ação 2"},{"name":"Ação 3","description":"Descrição da ação 3"}]}
+                        [AÇÕES]
+                        {"actions":[{"name":"Ação 1","description":"Descrição da ação 1"},{"name":"Ação 2","description":"Descrição da ação 2"},{"name":"Ação 3","description":"Descrição da ação 3"}]}
 
-                    IMPORTANTE: Apenas name e description. JSON em linha única."""
+                        IMPORTANTE: Apenas name e description. JSON em linha única."""
             base_context += actions_instruction
             
         return base_context
@@ -195,7 +202,7 @@ class LLMService:
         """Gera ações de fallback baseadas no contexto da resposta"""
         actions = []
         response_lower = response.lower()
-
+        
         if any(word in response_lower for word in ['guarda', 'inimigo', 'ameaça', 'perigo']):
             actions.extend([
                 {
@@ -266,7 +273,7 @@ class LLMService:
                 }
             ]
         
-        return actions[:3]
+        return actions[:3]  
     
     def _clean_response_text(self, response: str) -> str:
         """Remove blocos de ações da resposta principal"""

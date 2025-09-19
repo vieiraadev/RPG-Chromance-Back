@@ -8,6 +8,10 @@ from app.schemas.llm import (
     ContextualAction
 )
 from app.services.llm_service import LLMService
+from app.services.character_service import CharacterService
+from app.repositories.character_repo import CharacterRepository
+from app.core.database import get_database
+from app.api.auth import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,30 +21,65 @@ router = APIRouter(prefix="/api/llm", tags=["LLM"])
 def get_llm_service() -> LLMService:
     return LLMService()
 
+def get_character_service(db = Depends(get_database)) -> CharacterService:
+    """Dependency injection para o serviço de personagens"""
+    repository = CharacterRepository(db)
+    return CharacterService(repository)
+
 @router.post("/chat", response_model=LLMChatResponse, summary="Chat com LLM")
 async def chat_with_llm(
     request: LLMChatRequest,
-    llm_service: LLMService = Depends(get_llm_service)
+    llm_service: LLMService = Depends(get_llm_service),
+    character_service: CharacterService = Depends(get_character_service),
+    current_user_id: str = Depends(get_current_user)
 ):
     """
     Envia mensagem para a LLM e retorna resposta com ações contextuais.
-    Pode incluir contexto de personagem se character_id for fornecido.
+    Inclui contexto do personagem se character_id for fornecido.
     """
     try:
         character_context = None
-        # TODO: Quando integrar com characters, buscar contexto do personagem
-        # if request.character_id:
-        #     from app.services.character_service import CharacterService
-        #     character_service = CharacterService()
-        #     character = await character_service.get_by_id(request.character_id)
-        #     if character:
-        #         character_context = {
-        #             "nome": character.nome,
-        #             "raca": character.raca,
-        #             "classe": character.classe,
-        #             "nivel": character.nivel,
-        #             "descricao": character.descricao
-        #         }
+        
+        if request.character_id:
+            try:
+                character = await character_service.get_character(request.character_id, current_user_id)
+                if character:
+                    atributos_data = {}
+                    if hasattr(character, 'atributos') and character.atributos:
+                        if hasattr(character.atributos, 'vida'):
+                            atributos_data = {
+                                "vida": character.atributos.vida,
+                                "energia": character.atributos.energia,
+                                "forca": character.atributos.forca,
+                                "inteligencia": character.atributos.inteligencia
+                            }
+                        elif isinstance(character.atributos, dict):
+                            atributos_data = {
+                                "vida": character.atributos.get('vida', 20),
+                                "energia": character.atributos.get('energia', 20),
+                                "forca": character.atributos.get('forca', 10),
+                                "inteligencia": character.atributos.get('inteligencia', 10)
+                            }
+                    else:
+                        atributos_data = {
+                            "vida": 20,
+                            "energia": 20,
+                            "forca": 10,
+                            "inteligencia": 10
+                        }
+                    
+                    character_context = {
+                        "nome": character.name,
+                        "raca": character.raca,
+                        "classe": character.classe,
+                        "descricao": character.descricao,
+                        "atributos": atributos_data
+                    }
+                    logger.info(f"Contexto do personagem carregado: {character.name} ({character.raca} {character.classe})")
+                else:
+                    logger.warning(f"Personagem {request.character_id} não encontrado para o usuário {current_user_id}")
+            except Exception as char_error:
+                logger.error(f"Erro ao carregar personagem: {char_error}")
 
         history = []
         if request.conversation_history:
@@ -55,7 +94,7 @@ async def chat_with_llm(
             conversation_history=history,
             generate_actions=request.generate_actions
         )
-        
+
         contextual_actions = []
         if result.get("contextual_actions"):
             for action in result["contextual_actions"]:
