@@ -9,6 +9,7 @@ from app.schemas.llm import (
 )
 from app.services.llm_service import LLMService
 from app.services.character_service import CharacterService
+from app.services.campaign_service import CampaignService
 from app.repositories.character_repo import CharacterRepository
 from app.core.database import get_database
 from app.api.auth import get_current_user
@@ -26,19 +27,40 @@ def get_character_service(db = Depends(get_database)) -> CharacterService:
     repository = CharacterRepository(db)
     return CharacterService(repository)
 
+def get_campaign_service(db = Depends(get_database)) -> CampaignService:
+    """Dependency injection para o serviço de campanhas"""
+    return CampaignService(db)
+
 @router.post("/chat", response_model=LLMChatResponse, summary="Chat com LLM")
 async def chat_with_llm(
     request: LLMChatRequest,
     llm_service: LLMService = Depends(get_llm_service),
     character_service: CharacterService = Depends(get_character_service),
+    campaign_service: CampaignService = Depends(get_campaign_service),
     current_user_id: str = Depends(get_current_user)
 ):
     """
     Envia mensagem para a LLM e retorna resposta com ações contextuais.
-    Inclui contexto do personagem se character_id for fornecido.
+    Inclui contexto do personagem e campanha ativa.
     """
     try:
         character_context = None
+        campaign_context = None
+        
+        try:
+            active_campaign = await campaign_service.get_active_campaign(current_user_id)
+            if active_campaign:
+                campaign_context = {
+                    "campaign_id": active_campaign.campaign_id,
+                    "title": active_campaign.title,
+                    "chapter": active_campaign.chapter,
+                    "current_chapter": active_campaign.current_chapter or 1,
+                    "description": active_campaign.description,
+                    "full_description": active_campaign.full_description
+                }
+                logger.info(f"Contexto da campanha carregado: {active_campaign.title} - Capítulo {active_campaign.current_chapter}")
+        except Exception as campaign_error:
+            logger.error(f"Erro ao carregar campanha ativa: {campaign_error}")
         
         if request.character_id:
             try:
@@ -91,6 +113,7 @@ async def chat_with_llm(
         result = await llm_service.chat_with_llm(
             message=request.message,
             character_context=character_context,
+            campaign_context=campaign_context,
             conversation_history=history,
             generate_actions=request.generate_actions
         )

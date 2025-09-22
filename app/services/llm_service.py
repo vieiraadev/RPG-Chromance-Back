@@ -20,6 +20,7 @@ class LLMService:
         self, 
         message: str, 
         character_context: Optional[Dict[str, Any]] = None,
+        campaign_context: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[list] = None,
         generate_actions: bool = True,
         max_retries: int = 2
@@ -34,7 +35,7 @@ class LLMService:
                     "error": "Groq API key não configurada. Configure GROQ_API_KEY no arquivo .env"
                 }
             
-            system_message = self._build_system_message(character_context, generate_actions)
+            system_message = self._build_system_message(character_context, campaign_context, generate_actions)
             
             messages = [{"role": "system", "content": system_message}]
 
@@ -69,7 +70,7 @@ class LLMService:
                     if generate_actions:
                         contextual_actions = self._extract_actions_from_response(llm_response)
                         logger.info(f"Ações extraídas: {contextual_actions}")
-
+                    
                     clean_response = self._clean_response_text(llm_response)
                     
                     return {
@@ -104,7 +105,7 @@ class LLMService:
                 "error": f"Erro interno: {str(e)}"
             }
     
-    def _build_system_message(self, character_context: Optional[Dict[str, Any]] = None, generate_actions: bool = True) -> str:
+    def _build_system_message(self, character_context: Optional[Dict[str, Any]] = None, campaign_context: Optional[Dict[str, Any]] = None, generate_actions: bool = True) -> str:
         """Constrói a mensagem de sistema com contexto do RPG"""
         
         base_context = """Você é um Mestre de RPG no universo Chromance, um mundo cyberpunk.
@@ -121,35 +122,78 @@ class LLMService:
                         - Responda em português
                         - Máximo 120 palavras para a narrativa
                         - Crie situações interessantes"""
+
+        if campaign_context:
+            campaign_info = f"""
+
+                CAMPANHA ATIVA: {campaign_context.get('title', 'Campanha Desconhecida')}
+                CAPÍTULO ATUAL: {campaign_context.get('current_chapter', 1)}"""
+            
+            chapter = campaign_context.get('current_chapter', 1)
+            
+            if chapter == 1:
+                campaign_info += """
+
+                CONTEXTO DO CAPÍTULO 1 - "O Cubo das Sombras":
+                - Localização: Catedral em ruínas nas profundezas da cidade
+                - Objetivo: Encontrar a Relíquia Perdida (cubo pulsante de energia ancestral)
+                - Atmosfera: Sombria, antiga, misteriosa
+                - Perigos: Armadilhas ocultas, corrupção energética, guardas sombrios
+                - Elementos: Arquitetura gótica, energias sobrenaturais, tecnologia antiga
+                - Crie situações relacionadas a exploração de ruínas, armadilhas mágicas, e a busca pelo cubo místico."""
+                
+            elif chapter == 2:
+                campaign_info += """
+
+                CONTEXTO DO CAPÍTULO 2 - "Laboratório de Cristais Arcanos":
+                - Localização: Laboratório oculto nas profundezas da fortaleza inimiga
+                - Objetivo: Investigar experimentos proibidos com energia arcana
+                - Atmosfera: Científica, perigosa, experimental
+                - Perigos: Experimentos instáveis, cristais explosivos, cientistas loucos
+                - Elementos: Tecnologia avançada, cristais mágicos, energia instável
+                - Crie situações relacionadas a laboratórios high-tech, experimentos perigosos, e cristais com poderes arcanos."""
+                
+            elif chapter == 3: 
+                campaign_info += """
+
+                CONTEXTO DO CAPÍTULO 3 - "Coliseu de Neon":
+                - Localização: Coração da cidade subterrânea, beco entre prédios decadentes
+                - Objetivo: Sobreviver aos combates no coliseu underground
+                - Atmosfera: Urbana, violenta, espetacular
+                - Perigos: Combatentes letais, apostas perigosas, gangues urbanas
+                - Elementos: Luzes de neon, multidões, arena de combate, ambiente cyberpunk urbano
+                - Crie situações relacionadas a combates de arena, apostas ilegais, e a vida nas ruas cyberpunk."""
+            
+            base_context += campaign_info
         
         if character_context:
             atributos_info = ""
             if character_context.get('atributos'):
                 attrs = character_context['atributos']
                 atributos_info = f"""
-                - Atributos: Vida {attrs.get('vida', 20)}/20, Energia {attrs.get('energia', 20)}/20, Força {attrs.get('forca', 10)}/20, Inteligência {attrs.get('inteligencia', 10)}/20"""
+                    - Atributos: Vida {attrs.get('vida', 20)}/20, Energia {attrs.get('energia', 20)}/20, Força {attrs.get('forca', 10)}/20, Inteligência {attrs.get('inteligencia', 10)}/20"""
             
             char_info = f"""
 
-                        PERSONAGEM ATIVO:
-                        - Nome: {character_context.get('nome', 'Anônimo')}
-                        - Raça: {character_context.get('raca', 'Humano')}
-                        - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
-                        - Descrição: {character_context.get('descricao', 'Sem descrição')}
+                PERSONAGEM ATIVO:
+                - Nome: {character_context.get('nome', 'Anônimo')}
+                - Raça: {character_context.get('raca', 'Humano')}
+                - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
+                - Descrição: {character_context.get('descricao', 'Sem descrição')}
 
-                        IMPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
+                IMPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
             base_context += char_info
         
         if generate_actions:
             actions_instruction = """
 
-                        AÇÕES CONTEXTUAIS:
-                        Após sua narrativa, adicione exatamente 3 ações no formato:
+                AÇÕES CONTEXTUAIS:
+                Após sua narrativa, adicione exatamente 3 ações no formato:
 
-                        [AÇÕES]
-                        {"actions":[{"name":"Ação 1","description":"Descrição da ação 1"},{"name":"Ação 2","description":"Descrição da ação 2"},{"name":"Ação 3","description":"Descrição da ação 3"}]}
+                [AÇÕES]
+                {"actions":[{"name":"Ação 1","description":"Descrição da ação 1"},{"name":"Ação 2","description":"Descrição da ação 2"},{"name":"Ação 3","description":"Descrição da ação 3"}]}
 
-                        IMPORTANTE: Apenas name e description. JSON em linha única."""
+                IMPORTANTE: Apenas name e description. JSON em linha única."""
             base_context += actions_instruction
             
         return base_context
@@ -181,7 +225,7 @@ class LLMService:
                             "id": f"action_{i+1}",
                             "name": name.strip()[:50],
                             "description": description.strip()[:100],
-                            "priority": 3 - i, 
+                            "priority": 3 - i,  
                             "category": "general"
                         })
                     
@@ -273,7 +317,7 @@ class LLMService:
                 }
             ]
         
-        return actions[:3]  
+        return actions[:3] 
     
     def _clean_response_text(self, response: str) -> str:
         """Remove blocos de ações da resposta principal"""
