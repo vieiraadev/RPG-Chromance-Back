@@ -126,10 +126,20 @@ class LLMService:
         if campaign_context:
             campaign_info = f"""
 
-                CAMPANHA ATIVA: {campaign_context.get('title', 'Campanha Desconhecida')}
-                CAPÍTULO ATUAL: {campaign_context.get('current_chapter', 1)}"""
+                CAMPANHA ATIVA: {campaign_context.get('title', 'Campanha Desconhecida')}"""
             
             chapter = campaign_context.get('current_chapter', 1)
+            
+            if not chapter or chapter <= 0:
+                chapter = campaign_context.get('chapter', 1)
+            
+            try:
+                chapter = int(chapter)
+            except (ValueError, TypeError):
+                chapter = 1
+            
+            campaign_info += f"""
+                CAPÍTULO ATUAL: {chapter}"""
             
             if chapter == 1:
                 campaign_info += """
@@ -163,6 +173,17 @@ class LLMService:
                 - Perigos: Combatentes letais, apostas perigosas, gangues urbanas
                 - Elementos: Luzes de neon, multidões, arena de combate, ambiente cyberpunk urbano
                 - Crie situações relacionadas a combates de arena, apostas ilegais, e a vida nas ruas cyberpunk."""
+            
+            else:
+                campaign_info += f"""
+
+                CONTEXTO DO CAPÍTULO {chapter} - "Aventura Cyberpunk":
+                - Localização: Ambiente cyberpunk apropriado para o capítulo
+                - Objetivo: Missão desafiadora no universo Chromance
+                - Atmosfera: Cyberpunk, tecnológica, misteriosa
+                - Perigos: Ameaças tecnológicas e místicas apropriadas
+                - Elementos: Tecnologia avançada, magia arcana, ambiente urbano
+                - Crie situações interessantes e envolventes para este capítulo."""
             
             base_context += campaign_info
         
@@ -217,8 +238,6 @@ class LLMService:
                 
                 if matches:
                     contextual_actions = []
-                    fixed_icons = ['fas fa-play', 'fas fa-play', 'fas fa-play']
-                    default_categories = ['general', 'general', 'general']
                     
                     for i, (name, description) in enumerate(matches[:3]):
                         contextual_actions.append({

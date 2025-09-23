@@ -20,7 +20,6 @@ class CampaignProgress(BaseModel):
     active_character_name: Optional[str] = None
     current_chapter: int = 1
     chapters_completed: List[int] = Field(default_factory=list)
-    
     score: int = 0
     battles_won: int = 0
     battles_lost: int = 0

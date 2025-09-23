@@ -50,15 +50,37 @@ async def chat_with_llm(
         try:
             active_campaign = await campaign_service.get_active_campaign(current_user_id)
             if active_campaign:
+                chapter_field = getattr(active_campaign, 'chapter', None)
+                current_chapter_field = getattr(active_campaign, 'current_chapter', None)
+                title_field = getattr(active_campaign, 'title', 'SEM_TITULO')
+                current_chapter = None
+                try:
+                    ch_val = int(chapter_field) if chapter_field else 0
+                    curr_ch_val = int(current_chapter_field) if current_chapter_field else 0
+                    
+                    if ch_val > 0 and curr_ch_val > 0:
+                        current_chapter = max(ch_val, curr_ch_val)
+                    elif ch_val > 0:
+                        current_chapter = ch_val
+                    elif curr_ch_val > 0:
+                        current_chapter = curr_ch_val
+                    else:
+                        current_chapter = 1
+                        
+                except (ValueError, TypeError):
+                    current_chapter = 1
+
                 campaign_context = {
                     "campaign_id": active_campaign.campaign_id,
-                    "title": active_campaign.title,
-                    "chapter": active_campaign.chapter,
-                    "current_chapter": active_campaign.current_chapter or 1,
-                    "description": active_campaign.description,
-                    "full_description": active_campaign.full_description
+                    "title": title_field,
+                    "chapter": chapter_field,
+                    "current_chapter": current_chapter,
+                    "description": getattr(active_campaign, 'description', ''),
+                    "full_description": getattr(active_campaign, 'full_description', '')
                 }
-                logger.info(f"Contexto da campanha carregado: {active_campaign.title} - Capítulo {active_campaign.current_chapter}")
+                
+                logger.info(f"Contexto da campanha carregado: {title_field} - Capítulo {current_chapter}")
+                
         except Exception as campaign_error:
             logger.error(f"Erro ao carregar campanha ativa: {campaign_error}")
         
