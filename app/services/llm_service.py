@@ -2,19 +2,106 @@ import logging
 import json
 import re
 from typing import Dict, Any, Optional, List
+from enum import Enum
 import httpx
 import asyncio
 from app.config import GROQ_API_KEY, LLM_MODEL, LLM_MAX_TOKENS, LLM_TEMPERATURE
 
 logger = logging.getLogger(__name__)
 
+class ProgressionPhase(Enum):
+    INTRODUCTION = "introduction"
+    DEVELOPMENT = "development"    
+    RESOLUTION = "resolution"   
+
+class ChapterProgressionManager:
+    """Gerencia a progressão narrativa de um capítulo em 10 interações"""
+    
+    def __init__(self):
+        self.max_interactions = 10
+        
+    def get_current_phase(self, interaction_count: int) -> ProgressionPhase:
+        """Determina a fase atual baseada no número de interações"""
+        if interaction_count <= 3:
+            return ProgressionPhase.INTRODUCTION
+        elif interaction_count <= 7:
+            return ProgressionPhase.DEVELOPMENT
+        else:
+            return ProgressionPhase.RESOLUTION
+    
+    def should_provide_final_reward(self, interaction_count: int) -> bool:
+        """Verifica se deve entregar a recompensa final"""
+        return interaction_count >= 8
+    
+    def get_progression_prompt_addition(self, interaction_count: int, chapter: int) -> str:
+        """Gera contexto adicional para o prompt baseado na progressão"""
+        
+        phase = self.get_current_phase(interaction_count)
+        
+        interactions_in_phase = interaction_count - (
+            0 if phase == ProgressionPhase.INTRODUCTION else
+            3 if phase == ProgressionPhase.DEVELOPMENT else 7
+        )
+        
+        total_interactions = f"{interaction_count}/10"
+        
+        prompt_addition = f"""
+
+            PROGRESSÃO DO CAPÍTULO ({total_interactions}):
+
+            FASE ATUAL: {phase.value.upper()}
+            INTERAÇÃO NA FASE: {interactions_in_phase + 1}"""
+
+        if phase == ProgressionPhase.INTRODUCTION:
+            prompt_addition += """
+
+                INSTRUÇÕES PARA INTRODUÇÃO (1-3 interações):
+                - Estabeleça a atmosfera e contexto do capítulo
+                - Apresente o ambiente de forma envolvente
+                - Introduza elementos de mistério/desafio gradualmente
+                - Permita exploração e descoberta inicial
+                - Prepare o terreno para os desafios principais"""
+
+        elif phase == ProgressionPhase.DEVELOPMENT:
+            prompt_addition += """
+
+                INSTRUÇÕES PARA DESENVOLVIMENTO (4-7 interações):
+                - Apresente os desafios principais do capítulo
+                - Eleve progressivamente a tensão e dificuldade
+                - Desenvolva a narrativa com obstáculos interessantes
+                - Permita crescimento e progresso do personagem
+                - Construa em direção ao clímax final"""
+
+        else:  
+            prompt_addition += """
+
+                INSTRUÇÕES PARA RESOLUÇÃO (8-10 interações):
+                - Conduza para o clímax e resolução do capítulo
+                - Apresente o desafio/inimigo final se apropriado
+                - IMPORTANTE: Nas interações 8-10, prepare a entrega da recompensa final
+                - Na interação 9 ou 10, ENTREGUE o item/objetivo principal do capítulo
+                - Conclua de forma épica e satisfatória
+                - Prepare transição para o próximo capítulo se aplicável"""
+
+        if interaction_count >= 8:
+            prompt_addition += f"""
+
+                ATENÇÃO: ZONA DE RECOMPENSA FINAL!
+                - Esta é uma das últimas interações do capítulo
+                - Se ainda não entregou, DEVE entregar o item/objetivo principal
+                - Faça a entrega de forma épica e memorável
+                - Conclua a narrativa do capítulo satisfatoriamente"""
+
+        return prompt_addition
+
 class LLMService:
-    """Service para integração com LLM usando Groq"""
+    """Service para integração com LLM usando Groq com sistema de progressão"""
     
     def __init__(self):
         self.api_key = GROQ_API_KEY
         self.base_url = "https://api.groq.com/openai/v1" 
         self.model = LLM_MODEL
+        self.progression_manager = ChapterProgressionManager()
         
     async def chat_with_llm(
         self, 
@@ -23,10 +110,11 @@ class LLMService:
         campaign_context: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[list] = None,
         generate_actions: bool = True,
-        max_retries: int = 2
+        max_retries: int = 2,
+        interaction_count: int = 1
     ) -> Dict[str, Any]:
         """
-        Envia mensagem para a LLM Groq e retorna resposta com ações contextuais
+        Envia mensagem para a LLM Groq com sistema de progressão narrativa
         """
         try:
             if not self.api_key:
@@ -37,23 +125,29 @@ class LLMService:
 
             result = await self._make_llm_request(
                 message, character_context, campaign_context, 
-                conversation_history, generate_actions, use_strict_format=False
+                conversation_history, generate_actions, use_strict_format=False,
+                interaction_count=interaction_count
             )
             
             if not result["success"]:
                 return result
                 
             llm_response = result["raw_response"]
-            logger.info(f"Resposta completa da LLM: {llm_response}")
+            logger.info(f"Resposta completa da LLM (Interação {interaction_count}/10): {llm_response}")
             
             contextual_actions = []
             if generate_actions:
                 contextual_actions = self._extract_actions_from_response(llm_response)
+
+                progression_actions = self._get_progression_actions(interaction_count, campaign_context)
+                if progression_actions:
+                    contextual_actions.extend(progression_actions)
                 
                 if not contextual_actions or self._is_fallback_actions(contextual_actions):
                     logger.info("Primeira tentativa falhou, tentando formato rigoroso...")
                     strict_result = await self._retry_with_strict_format(
-                        message, character_context, campaign_context, conversation_history
+                        message, character_context, campaign_context, 
+                        conversation_history, interaction_count
                     )
                     
                     if strict_result and strict_result.get("contextual_actions"):
@@ -64,12 +158,15 @@ class LLMService:
             
             clean_response = self._clean_response_text(llm_response)
             
+            progression_info = self._get_progression_info(interaction_count, campaign_context)
+            
             return {
                 "success": True,
                 "response": clean_response,
                 "contextual_actions": contextual_actions,
                 "usage": result.get("usage", {}),
-                "provider": "Groq"
+                "provider": "Groq",
+                "progression": progression_info
             }
                     
         except Exception as e:
@@ -82,12 +179,14 @@ class LLMService:
     async def _make_llm_request(
         self, message: str, character_context: Optional[Dict[str, Any]], 
         campaign_context: Optional[Dict[str, Any]], conversation_history: Optional[list],
-        generate_actions: bool, use_strict_format: bool = False
+        generate_actions: bool, use_strict_format: bool = False, 
+        interaction_count: int = 1
     ) -> Dict[str, Any]:
-        """Faz a requisição para a LLM"""
+        """Faz a requisição incluindo progressão"""
         try:
             system_message = self._build_system_message(
-                character_context, campaign_context, generate_actions, use_strict_format
+                character_context, campaign_context, generate_actions, 
+                use_strict_format, interaction_count
             )
             
             messages = [{"role": "system", "content": system_message}]
@@ -108,7 +207,7 @@ class LLMService:
                         "model": self.model,
                         "messages": messages,
                         "max_tokens": min(LLM_MAX_TOKENS, 1200), 
-                        "temperature": 0.3 if use_strict_format else LLM_TEMPERATURE 
+                        "temperature": 0.3 if use_strict_format else LLM_TEMPERATURE
                     },
                     timeout=20.0 
                 )
@@ -147,14 +246,16 @@ class LLMService:
     
     async def _retry_with_strict_format(
         self, message: str, character_context: Optional[Dict[str, Any]], 
-        campaign_context: Optional[Dict[str, Any]], conversation_history: Optional[list]
+        campaign_context: Optional[Dict[str, Any]], conversation_history: Optional[list],
+        interaction_count: int = 1
     ) -> Optional[Dict[str, Any]]:
         """Segunda tentativa com formato mais rigoroso"""
         try:
             result = await self._make_llm_request(
                 f"Resposta anterior foi inválida. {message}", 
                 character_context, campaign_context, conversation_history, 
-                generate_actions=True, use_strict_format=True
+                generate_actions=True, use_strict_format=True,
+                interaction_count=interaction_count
             )
             
             if result["success"]:
@@ -178,9 +279,10 @@ class LLMService:
         self, character_context: Optional[Dict[str, Any]] = None, 
         campaign_context: Optional[Dict[str, Any]] = None, 
         generate_actions: bool = True, 
-        use_strict_format: bool = False
+        use_strict_format: bool = False,
+        interaction_count: int = 1
     ) -> str:
-        """Constrói a mensagem de sistema com contexto do RPG"""
+        """Constrói mensagem de sistema com progressão narrativa"""
         
         base_context = """Você é um Mestre de RPG no universo Chromance, um mundo cyberpunk.
 
@@ -213,7 +315,7 @@ class LLMService:
                 chapter = 1
             
             campaign_info += f"""
-                    CAPÍTULO ATUAL: {chapter}"""
+                CAPÍTULO ATUAL: {chapter}"""
             
             if chapter == 1:
                 campaign_info += """
@@ -259,6 +361,11 @@ class LLMService:
                     - Elementos: Tecnologia avançada, magia arcana, ambiente urbano
                     - Crie situações interessantes e envolventes para este capítulo."""
             
+            progression_context = self.progression_manager.get_progression_prompt_addition(
+                interaction_count, chapter
+            )
+            campaign_info += progression_context
+            
             base_context += campaign_info
         
         if character_context:
@@ -270,39 +377,39 @@ class LLMService:
             
             char_info = f"""
 
-                    PERSONAGEM ATIVO:
-                    - Nome: {character_context.get('nome', 'Anônimo')}
-                    - Raça: {character_context.get('raca', 'Humano')}
-                    - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
-                    - Descrição: {character_context.get('descricao', 'Sem descrição')}
+                PERSONAGEM ATIVO:
+                - Nome: {character_context.get('nome', 'Anônimo')}
+                - Raça: {character_context.get('raca', 'Humano')}
+                - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
+                - Descrição: {character_context.get('descricao', 'Sem descrição')}
 
-                    IMPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
+                MPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
             base_context += char_info
         
         if generate_actions:
             if use_strict_format:
                 actions_instruction = """
 
-                    FORMATO CRÍTICO - SIGA EXATAMENTE:
+                FORMATO CRÍTICO - SIGA EXATAMENTE:
 
-                    1. Escreva sua narrativa (máximo 120 palavras)
-                    2. Adicione uma linha vazia
-                    3. Escreva EXATAMENTE: [ACOES]
-                    4. Próxima linha: JSON com 3 ações
+                1. Escreva sua narrativa (máximo 120 palavras)
+                2. Adicione uma linha vazia
+                3. Escreva EXATAMENTE: [ACOES]
+                4. Próxima linha: JSON com 3 ações
 
-                    EXEMPLO OBRIGATÓRIO:
-                    Sua narrativa aqui...
+                EXEMPLO OBRIGATÓRIO:
+                Sua narrativa aqui...
 
-                    [ACOES]
-                    {"actions":[{"name":"Ação A","description":"Descrição A"},{"name":"Ação B","description":"Descrição B"},{"name":"Ação C","description":"Descrição C"}]}
+                [ACOES]
+                {"actions":[{"name":"Ação A","description":"Descrição A"},{"name":"Ação B","description":"Descrição B"},{"name":"Ação C","description":"Descrição C"}]}
 
-                    REGRAS OBRIGATÓRIAS:
-                    - JSON em UMA linha só
-                    - Exatamente 3 ações
-                    - Apenas campos "name" e "description"
-                    - Nomes curtos (máximo 30 chars)
-                    - Descrições curtas (máximo 60 chars)
-                    - NÃO adicione nada após o JSON"""
+                REGRAS OBRIGATÓRIAS:
+                - JSON em UMA linha só
+                - Exatamente 3 ações
+                - Apenas campos "name" e "description"
+                - Nomes curtos (máximo 30 chars)
+                - Descrições curtas (máximo 60 chars)
+                - NÃO adicione nada após o JSON"""
                 
             else:
                 actions_instruction = """
@@ -353,7 +460,6 @@ class LLMService:
     def _extract_strict_actions_pattern(self, response: str) -> List[Dict[str, Any]]:
         """Extração rigorosa do padrão [ACOES]"""
         try:
-            # Padrão mais específico
             pattern = r'\[A[CÇ][OÕ]ES?\]\s*\n?\s*(\{"actions":\s*\[.*?\]\s*\})'
             match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
             
@@ -373,10 +479,9 @@ class LLMService:
     def _extract_any_valid_json(self, response: str) -> List[Dict[str, Any]]:
         """Busca qualquer JSON válido com ações"""
         try:
-            # Procura por qualquer estrutura JSON com "actions"
             json_patterns = [
-                r'\{"actions":\s*\[.*?\]\}',  # Formato exato
-                r'\{[^{}]*"actions"\s*:\s*\[[^\]]*\][^{}]*\}',  # Formato com outros campos
+                r'\{"actions":\s*\[.*?\]\}',
+                r'\{[^{}]*"actions"\s*:\s*\[[^\]]*\][^{}]*\}',
             ]
             
             for pattern in json_patterns:
@@ -401,7 +506,6 @@ class LLMService:
         try:
             actions = []
             
-            # Busca padrões como "name":"algo","description":"algo"
             pattern = r'"name"\s*:\s*"([^"]{1,50})"\s*[,}][^}]*"description"\s*:\s*"([^"]{1,100})"'
             matches = re.findall(pattern, response, re.DOTALL | re.IGNORECASE)
             
@@ -415,7 +519,7 @@ class LLMService:
                         "category": "extracted"
                     })
             
-            return actions if len(actions) >= 2 else [] 
+            return actions if len(actions) >= 2 else []
             
         except Exception as e:
             logger.debug(f"Erro na extração flexível: {e}")
@@ -441,8 +545,8 @@ class LLMService:
                         "id": f"action_{i+1}",
                         "name": name,
                         "description": description,
-                        "priority": 4 - i, 
-                        "category": "contextual" 
+                        "priority": 4 - i,
+                        "category": "contextual"
                     })
                     
             except Exception as e:
@@ -509,7 +613,6 @@ class LLMService:
                 {"name": "Aguardar", "description": "Esperar por mais informações"}
             ]
         
-        # Formata as ações
         for i, action_data in enumerate(base_actions[:3]):
             actions.append({
                 "id": f"smart_fallback_{i+1}",
@@ -549,16 +652,71 @@ class LLMService:
     
     def _clean_response_text(self, response: str) -> str:
         """Remove blocos de ações da resposta principal"""
-        # Remove qualquer coisa depois de [ACOES]
         clean_text = re.sub(r'\[A[CÇ][OÕ]ES?\].*$', '', response, flags=re.DOTALL | re.IGNORECASE)
-        # Remove JSONs órfãos que possam ter ficado
         clean_text = re.sub(r'\{[^{}]*"actions"[^}]*\}', '', clean_text, flags=re.DOTALL)
         clean_text = re.sub(r'\{[^{}]*"name"[^}]*\}', '', clean_text, flags=re.DOTALL)
-         # Remove quebras excessivas
         clean_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', clean_text)
         clean_text = clean_text.strip()
         
         return clean_text
+
+    def _get_progression_actions(self, interaction_count: int, campaign_context: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Gera ações específicas baseadas na progressão"""
+        if not campaign_context:
+            return []
+        
+        chapter = campaign_context.get('current_chapter', 1) or 1
+        phase = self.progression_manager.get_current_phase(interaction_count)
+        
+        progression_actions = []
+        
+        if phase == ProgressionPhase.INTRODUCTION:
+            progression_actions = [
+                {
+                    "id": f"intro_explore_{interaction_count}",
+                    "name": "Explorar Ambiente",
+                    "description": "Investigar detalhadamente o cenário",
+                    "priority": 4,
+                    "category": "progression"
+                }
+            ]
+        
+        elif phase == ProgressionPhase.DEVELOPMENT:
+            progression_actions = [
+                {
+                    "id": f"dev_advance_{interaction_count}",
+                    "name": "Avançar no Objetivo",
+                    "description": "Progredir em direção ao objetivo principal",
+                    "priority": 5,
+                    "category": "progression"
+                }
+            ]
+        
+        elif phase == ProgressionPhase.RESOLUTION:
+            if interaction_count >= 8:
+                progression_actions = [
+                    {
+                        "id": f"final_objective_{interaction_count}",
+                        "name": "Buscar Recompensa Final",
+                        "description": "Tentar obter o item principal do capítulo",
+                        "priority": 5,
+                        "category": "progression"
+                    }
+                ]
+        
+    def _get_progression_info(self, interaction_count: int, campaign_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Retorna informações sobre a progressão atual"""
+        chapter = campaign_context.get('current_chapter', 1) if campaign_context else 1
+        phase = self.progression_manager.get_current_phase(interaction_count)
+        
+        return {
+            "interaction_count": interaction_count,
+            "max_interactions": self.progression_manager.max_interactions,
+            "current_phase": phase.value,
+            "chapter": chapter,
+            "should_provide_reward": self.progression_manager.should_provide_final_reward(interaction_count),
+            "progress_percentage": min((interaction_count / self.progression_manager.max_interactions) * 100, 100)
+        }
     
     async def generate_character_suggestion(self, partial_data: Dict[str, Any]) -> Dict[str, Any]:
         """Gera sugestões para criação de personagem"""

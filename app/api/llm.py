@@ -5,7 +5,8 @@ from app.schemas.llm import (
     LLMChatResponse,
     CharacterSuggestionRequest,
     LLMHealthCheck,
-    ContextualAction
+    ContextualAction,
+    ProgressionResetResponse 
 )
 from app.services.llm_service import LLMService
 from app.services.character_service import CharacterService
@@ -31,7 +32,7 @@ def get_campaign_service(db = Depends(get_database)) -> CampaignService:
     """Dependency injection para o serviço de campanhas"""
     return CampaignService(db)
 
-@router.post("/chat", response_model=LLMChatResponse, summary="Chat com LLM")
+@router.post("/chat", response_model=LLMChatResponse, summary="Chat com LLM com progressão")
 async def chat_with_llm(
     request: LLMChatRequest,
     llm_service: LLMService = Depends(get_llm_service),
@@ -40,19 +41,19 @@ async def chat_with_llm(
     current_user_id: str = Depends(get_current_user)
 ):
     """
-    Envia mensagem para a LLM e retorna resposta com ações contextuais.
-    Inclui contexto do personagem e campanha ativa.
+    Envia mensagem para a LLM com sistema de progressão narrativa (10 interações)
     """
     try:
         character_context = None
         campaign_context = None
-        
+
         try:
             active_campaign = await campaign_service.get_active_campaign(current_user_id)
             if active_campaign:
                 chapter_field = getattr(active_campaign, 'chapter', None)
                 current_chapter_field = getattr(active_campaign, 'current_chapter', None)
                 title_field = getattr(active_campaign, 'title', 'SEM_TITULO')
+                
                 current_chapter = None
                 try:
                     ch_val = int(chapter_field) if chapter_field else 0
@@ -79,7 +80,7 @@ async def chat_with_llm(
                     "full_description": getattr(active_campaign, 'full_description', '')
                 }
                 
-                logger.info(f"Contexto da campanha carregado: {title_field} - Capítulo {current_chapter}")
+                logger.info(f"Contexto da campanha carregado: {title_field} - Capítulo {current_chapter} - Interação {request.interaction_count}/10")
                 
         except Exception as campaign_error:
             logger.error(f"Erro ao carregar campanha ativa: {campaign_error}")
@@ -92,7 +93,6 @@ async def chat_with_llm(
                     if hasattr(character, 'atributos') and character.atributos:
                         if hasattr(character.atributos, 'vida'):
                             atributos_data = {
-                                "vida": character.atributos.vida,
                                 "energia": character.atributos.energia,
                                 "forca": character.atributos.forca,
                                 "inteligencia": character.atributos.inteligencia
@@ -137,7 +137,8 @@ async def chat_with_llm(
             character_context=character_context,
             campaign_context=campaign_context,
             conversation_history=history,
-            generate_actions=request.generate_actions
+            generate_actions=request.generate_actions,
+            interaction_count=request.interaction_count  
         )
 
         contextual_actions = []
@@ -150,7 +151,8 @@ async def chat_with_llm(
             response=result.get("response"),
             contextual_actions=contextual_actions,
             error=result.get("error"),
-            usage=result.get("usage")
+            usage=result.get("usage"),
+            progression=result.get("progression") 
         )
 
     except Exception as e:
@@ -158,6 +160,30 @@ async def chat_with_llm(
         raise HTTPException(
             status_code=500,
             detail=f"Erro interno no chat: {str(e)}"
+        )
+
+@router.post("/reset-progression", response_model=ProgressionResetResponse, summary="Resetar progressão do capítulo")
+async def reset_chapter_progression(
+    campaign_service: CampaignService = Depends(get_campaign_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    Reseta a progressão do capítulo atual para começar um novo ciclo de 10 interações
+    """
+    try:
+        logger.info(f"Progressão resetada para usuário {current_user_id}")
+        
+        return ProgressionResetResponse(
+            success=True,
+            message="Progressão do capítulo resetada. Novo ciclo de 10 interações iniciado.",
+            interaction_count=1
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao resetar progressão: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao resetar progressão: {str(e)}"
         )
 
 @router.post("/character-suggestion", response_model=LLMChatResponse, summary="Sugestão de personagem")
