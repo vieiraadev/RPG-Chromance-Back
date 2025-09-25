@@ -66,7 +66,7 @@ class CharacterResponse(BaseModel):
     classe: str
     descricao: Optional[str] = ""
     atributos: Dict[str, int]
-    inventory: List[InventoryItemSchema] = []  # NOVO
+    inventory: List[InventoryItemSchema] = []
     imageUrl: str
     user_id: Optional[str] = None
     is_selected: bool = False
