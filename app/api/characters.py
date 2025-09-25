@@ -158,3 +158,26 @@ async def delete_character(
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+
+@router.get("/{character_id}/inventory", response_model=list, summary="Buscar inventário")
+async def get_character_inventory(
+    character_id: str,
+    service: CharacterService = Depends(get_character_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Retorna o inventário completo do personagem"""
+    try:
+        from app.core.database import get_database
+        db = next(get_database())
+        from app.repositories.character_repo import CharacterRepository
+        
+        repo = CharacterRepository(db)
+        inventory = await repo.get_inventory(character_id, current_user_id)
+        
+        return inventory
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=str(e)
+        )

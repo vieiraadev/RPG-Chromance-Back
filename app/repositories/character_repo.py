@@ -31,7 +31,8 @@ class CharacterRepository:
             character_data["user_id"] = user_id
             character_data["created_at"] = datetime.utcnow()
             character_data["active"] = True
-            character_data["is_selected"] = False 
+            character_data["is_selected"] = False
+            character_data["inventory"] = []
             
             if hasattr(character_data.get("atributos"), "dict"):
                 character_data["atributos"] = character_data["atributos"].dict()
@@ -173,7 +174,7 @@ class CharacterRepository:
             return None
 
     async def select_character_by_id(self, character_id: str, user_id: str = None) -> Optional[CharacterModel]:
-        """Seleciona um personagem específico por ID (método auxiliar)"""
+        """Seleciona um personagem específico por ID"""
         try:
             query = {"_id": ObjectId(character_id), "active": True}
             if user_id:
@@ -204,4 +205,99 @@ class CharacterRepository:
             return count > 0
         except Exception as e:
             print(f"Erro ao verificar personagem selecionado: {e}")
+            return False
+
+    async def add_item_to_inventory(
+        self, 
+        character_id: str, 
+        item: dict,
+        user_id: str = None
+    ) -> Optional[CharacterModel]:
+        """Adiciona um item ao inventário do personagem (evita duplicatas por capítulo)"""
+        try:
+            query = {"_id": ObjectId(character_id), "active": True}
+            if user_id:
+                query["user_id"] = user_id
+
+            existing_check = self.collection.find_one({
+                **query,
+                "inventory": {
+                    "$elemMatch": {
+                        "chapter": item.get("chapter"),
+                        "campaign_id": item.get("campaign_id"),
+                        "type": "reward"
+                    }
+                }
+            })
+            
+            if existing_check:
+                print(f"Recompensa do capítulo {item.get('chapter')} já existe no inventário")
+                return CharacterModel.from_mongo(existing_check)
+            
+            if "obtained_at" not in item:
+                item["obtained_at"] = datetime.utcnow()
+            
+            result = self.collection.find_one_and_update(
+                query,
+                {
+                    "$push": {"inventory": item},
+                    "$set": {"updated_at": datetime.utcnow()}
+                },
+                return_document=True
+            )
+            
+            if result:
+                print(f"Item '{item.get('name')}' adicionado ao inventário")
+                return CharacterModel.from_mongo(result)
+            return None
+            
+        except Exception as e:
+            print(f"Erro ao adicionar item ao inventário: {e}")
+            return None
+
+    async def get_inventory(
+        self, 
+        character_id: str,
+        user_id: str = None
+    ) -> List[dict]:
+        """Retorna o inventário do personagem"""
+        try:
+            query = {"_id": ObjectId(character_id), "active": True}
+            if user_id:
+                query["user_id"] = user_id
+            
+            character = self.collection.find_one(query, {"inventory": 1})
+            
+            if character:
+                return character.get("inventory", [])
+            return []
+            
+        except Exception as e:
+            print(f"Erro ao buscar inventário: {e}")
+            return []
+
+    async def remove_item_from_inventory(
+        self,
+        character_id: str,
+        item_id: str,
+        user_id: str = None
+    ) -> bool:
+        """Remove um item do inventário"""
+        try:
+            query = {"_id": ObjectId(character_id), "active": True}
+            if user_id:
+                query["user_id"] = user_id
+            
+            result = self.collection.update_one(
+                query,
+                {
+                    "$pull": {"inventory": {"id": item_id}},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            
+            return result.modified_count > 0
+            
+        except Exception as e:
+            print(f"Erro ao remover item: {e}")
             return False

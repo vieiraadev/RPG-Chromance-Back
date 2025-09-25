@@ -1,4 +1,4 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime
 from pydantic import BaseModel, Field, validator
 
@@ -8,7 +8,7 @@ class Atributos(BaseModel):
     energia: int = Field(ge=8, le=20, default=10)
     forca: int = Field(ge=8, le=20, default=10)
     inteligencia: int = Field(ge=8, le=20, default=10)
-    
+
     @validator('*')
     def validate_attribute_range(cls, v):
         if not 8 <= v <= 20:
@@ -23,13 +23,13 @@ class CharacterCreate(BaseModel):
     descricao: Optional[str] = ""
     atributos: Atributos
     imageUrl: str = "assets/images/card-image1.jpg"
-    
+
     @validator('name', 'raca', 'classe')
     def validate_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Campo não pode estar vazio')
         return v.strip()
-    
+
     @validator('atributos')
     def validate_total_points(cls, v):
         total = v.vida + v.energia + v.forca + v.inteligencia
@@ -45,7 +45,18 @@ class CharacterUpdate(BaseModel):
     descricao: Optional[str] = None
     atributos: Optional[Atributos] = None
     imageUrl: Optional[str] = None
-    is_selected: Optional[bool] = None  
+    is_selected: Optional[bool] = None
+
+class InventoryItemSchema(BaseModel):
+    """Schema para item do inventário"""
+    id: str
+    name: str
+    description: str
+    type: str
+    chapter: int
+    campaign_id: str
+    obtained_at: datetime
+    metadata: Optional[Dict] = {}
 
 class CharacterResponse(BaseModel):
     """Schema de resposta do personagem"""
@@ -55,13 +66,14 @@ class CharacterResponse(BaseModel):
     classe: str
     descricao: Optional[str] = ""
     atributos: Dict[str, int]
+    inventory: List[InventoryItemSchema] = []  # NOVO
     imageUrl: str
     user_id: Optional[str] = None
-    is_selected: bool = False  
+    is_selected: bool = False
     created_at: datetime
-    updated_at: Optional[datetime] = None  
+    updated_at: Optional[datetime] = None
     active: bool = True
-    
+
     class Config:
         populate_by_name = True
         json_encoders = {

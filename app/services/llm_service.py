@@ -718,6 +718,41 @@ class LLMService:
             "progress_percentage": min((interaction_count / self.progression_manager.max_interactions) * 100, 100)
         }
     
+    async def process_reward_delivery(
+        self,
+        llm_response: str,
+        interaction_count: int,
+        chapter: int,
+        campaign_id: str,
+        character_repo,
+        character_id: str,
+        user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Processa entrega de recompensa se detectada"""
+        from app.services.inventory_service import InventoryService
+
+        if interaction_count < 8:
+            return None
+
+        if InventoryService.detect_reward_in_response(llm_response, chapter):
+            logger.info(f"Recompensa detectada no capítulo {chapter}!")
+
+            reward_item = InventoryService.create_reward_item(chapter, campaign_id)
+
+            updated_character = await character_repo.add_item_to_inventory(
+                character_id=character_id,
+                item=reward_item,
+                user_id=user_id
+            )
+            
+            if updated_character:
+                logger.info(f"'{reward_item['name']}' adicionado ao inventário!")
+                return reward_item
+            else:
+                logger.error("Falha ao adicionar recompensa ao inventário")
+        
+        return None
+    
     async def generate_character_suggestion(self, partial_data: Dict[str, Any]) -> Dict[str, Any]:
         """Gera sugestões para criação de personagem"""
         prompt = f"Baseado nos dados: {partial_data}\n\nSugira melhorias para um personagem cyberpunk de Chromance. Seja criativo mas coerente."

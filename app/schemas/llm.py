@@ -11,48 +11,49 @@ class ContextualAction(BaseModel):
     id: str = Field(..., description="ID único da ação")
     name: str = Field(..., description="Nome da ação")
     description: str = Field(..., description="Descrição da ação")
-    priority: int = Field(default=1, description="Prioridade (1-5, sendo 5 mais importante)")
+    priority: int = Field(default=1, description="Prioridade (1-5)")
     category: str = Field(default="general", description="Categoria da ação")
 
 class ProgressionInfo(BaseModel):
     """Informações sobre a progressão do capítulo"""
     interaction_count: int = Field(..., description="Número da interação atual")
     max_interactions: int = Field(..., description="Máximo de interações (10)")
-    current_phase: str = Field(..., description="Fase atual (introduction/development/resolution)")
+    current_phase: str = Field(..., description="Fase atual")
     chapter: int = Field(..., description="Número do capítulo atual")
-    should_provide_reward: bool = Field(..., description="Se deve entregar recompensa final")
-    progress_percentage: float = Field(..., description="Percentual de progresso (0-100)")
+    should_provide_reward: bool = Field(..., description="Se deve entregar recompensa")
+    progress_percentage: float = Field(..., description="Percentual de progresso")
+    reward_delivered: Optional[Dict[str, str]] = Field(None, description="Recompensa entregue")
 
 class LLMChatRequest(BaseModel):
     """Request para chat com LLM"""
     message: str = Field(..., description="Mensagem do usuário")
-    character_id: Optional[str] = Field(None, description="ID do personagem (opcional)")
+    character_id: Optional[str] = Field(None, description="ID do personagem")
     conversation_history: Optional[List[ChatMessage]] = Field(
         default=[],
         description="Histórico da conversa"
     )
-    generate_actions: bool = Field(default=True, description="Se deve gerar ações contextuais")
-    interaction_count: int = Field(default=1, description="Número da interação atual (1-10)") 
+    generate_actions: bool = Field(default=True, description="Se deve gerar ações")
+    interaction_count: int = Field(default=1, description="Número da interação (1-10)")
 
 class LLMChatResponse(BaseModel):
     """Response do chat com LLM"""
-    success: bool = Field(..., description="Se a requisição foi bem-sucedida")
+    success: bool = Field(..., description="Se foi bem-sucedida")
     response: Optional[str] = Field(None, description="Resposta da LLM")
     contextual_actions: Optional[List[ContextualAction]] = Field(
         default=[],
-        description="Ações contextuais sugeridas"
+        description="Ações contextuais"
     )
-    error: Optional[str] = Field(None, description="Mensagem de erro, se houver")
-    usage: Optional[Dict[str, Any]] = Field(None, description="Informações de uso da API")
-    progression: Optional[ProgressionInfo] = Field(None, description="Informações de progressão do capítulo") 
+    error: Optional[str] = Field(None, description="Mensagem de erro")
+    usage: Optional[Dict[str, Any]] = Field(None, description="Informações de uso")
+    progression: Optional[ProgressionInfo] = Field(None, description="Informações de progressão")
 
 class CharacterSuggestionRequest(BaseModel):
     """Request para sugestão de personagem"""
-    partial_data: Dict[str, Any] = Field(..., description="Dados parciais do personagem")
+    partial_data: Dict[str, Any] = Field(..., description="Dados parciais")
 
 class StoryContinuationRequest(BaseModel):
     """Request para continuação de história"""
-    current_situation: str = Field(..., description="Situação atual da narrativa")
+    current_situation: str = Field(..., description="Situação atual")
     character_id: str = Field(..., description="ID do personagem")
 
 class LLMHealthCheck(BaseModel):
@@ -63,6 +64,6 @@ class LLMHealthCheck(BaseModel):
 
 class ProgressionResetResponse(BaseModel):
     """Response para reset de progressão"""
-    success: bool = Field(..., description="Se o reset foi bem-sucedido")
+    success: bool = Field(..., description="Se foi bem-sucedido")
     message: str = Field(..., description="Mensagem de confirmação")
-    interaction_count: int = Field(default=1, description="Nova contagem de interação")
+    interaction_count: int = Field(default=1, description="Nova contagem")
