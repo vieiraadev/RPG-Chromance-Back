@@ -96,7 +96,7 @@ class ChapterProgressionManager:
         return prompt_addition
 
 class LLMService:
-    """Service para integração com LLM usando Groq com sistema de progressão"""
+    """Service para integração com LLM usando Groq com sistema de progressão e RAG"""
     
     def __init__(self):
         self.api_key = GROQ_API_KEY
@@ -116,7 +116,7 @@ class LLMService:
         interaction_count: int = 1
     ) -> Dict[str, Any]:
         """
-        Envia mensagem para a LLM Groq com sistema de progressão narrativa
+        Envia mensagem para a LLM Groq com sistema de progressão narrativa e RAG
         """
         try:
             if not self.api_key:
@@ -159,7 +159,7 @@ class LLMService:
                 logger.info(f"Ações finais extraídas: {contextual_actions}")
             
             clean_response = self._clean_response_text(llm_response)
-            
+
             if campaign_context and character_context:
                 try:
                     chapter = campaign_context.get('current_chapter', 1) or 1
@@ -206,17 +206,68 @@ class LLMService:
                 "error": f"Erro interno: {str(e)}"
             }
     
+    async def _get_relevant_context_from_history(
+        self,
+        message: str,
+        campaign_context: Optional[Dict[str, Any]],
+        n_results: int = 3
+    ) -> str:
+        """Busca narrativas relevantes usando RAG"""
+        if not campaign_context or not campaign_context.get('_id'):
+            return ""
+        
+        try:
+            similar_narratives = self.vector_store.search_similar_narratives(
+                query_text=message,
+                campaign_id=str(campaign_context.get('_id')),
+                chapter=campaign_context.get('current_chapter'),
+                n_results=n_results
+            )
+            
+            if not similar_narratives:
+                return ""
+
+            context_parts = ["CONTEXTO RELEVANTE DAS NARRATIVAS ANTERIORES:"]
+            
+            for i, item in enumerate(similar_narratives, 1):
+                narrative = item['narrative']
+                metadata = item['metadata']
+                interaction = metadata.get('interaction_count', '?')
+                phase = metadata.get('phase', 'unknown')
+                
+                if len(narrative) > 200:
+                    narrative = narrative[:197] + "..."
+                
+                context_parts.append(
+                    f"{i}. [Interação {interaction} - {phase}] {narrative}"
+                )
+            
+            context_text = "\n".join(context_parts)
+            logger.info(f"RAG: Recuperadas {len(similar_narratives)} narrativas relevantes")
+            
+            return context_text
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar contexto RAG: {e}")
+            return ""
+    
     async def _make_llm_request(
         self, message: str, character_context: Optional[Dict[str, Any]], 
         campaign_context: Optional[Dict[str, Any]], conversation_history: Optional[list],
         generate_actions: bool, use_strict_format: bool = False, 
         interaction_count: int = 1
     ) -> Dict[str, Any]:
-        """Faz a requisição incluindo progressão"""
+        """Faz a requisição incluindo progressão e RAG"""
         try:
+            rag_context = await self._get_relevant_context_from_history(
+                message=message,
+                campaign_context=campaign_context,
+                n_results=3
+            )
+            
             system_message = self._build_system_message(
                 character_context, campaign_context, generate_actions, 
-                use_strict_format, interaction_count
+                use_strict_format, interaction_count, rag_context
             )
             
             messages = [{"role": "system", "content": system_message}]
@@ -310,9 +361,10 @@ class LLMService:
         campaign_context: Optional[Dict[str, Any]] = None, 
         generate_actions: bool = True, 
         use_strict_format: bool = False,
-        interaction_count: int = 1
+        interaction_count: int = 1,
+        rag_context: str = ""
     ) -> str:
-        """Constrói mensagem de sistema com progressão narrativa"""
+        """Constrói mensagem de sistema com progressão narrativa e RAG"""
         
         base_context = """Você é um Mestre de RPG no universo Chromance, um mundo cyberpunk.
 
@@ -328,6 +380,14 @@ class LLMService:
                 - Responda em português
                 - Máximo 120 palavras para a narrativa
                 - Crie situações interessantes"""
+        
+        if rag_context:
+            base_context += f"""
+
+                {rag_context}
+
+                IMPORTANTE: Use essas narrativas anteriores para manter CONSISTÊNCIA e CONTINUIDADE.
+                Evite repetir eventos, mas construa em cima do que já aconteceu."""
 
         if campaign_context:
             campaign_info = f"""
@@ -413,7 +473,7 @@ class LLMService:
                 - Classe: {character_context.get('classe', 'Aventureiro')}{atributos_info}
                 - Descrição: {character_context.get('descricao', 'Sem descrição')}
 
-                MPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
+                IMPORTANTE: Use estas informações do personagem para personalizar suas respostas. Considere a classe, raça e atributos nas situações que criar."""
             base_context += char_info
         
         if generate_actions:
@@ -710,6 +770,7 @@ class LLMService:
                     "category": "progression"
                 }
             ]
+        
         elif phase == ProgressionPhase.DEVELOPMENT:
             progression_actions = [
                 {
