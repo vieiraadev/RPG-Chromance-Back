@@ -6,6 +6,7 @@ from enum import Enum
 import httpx
 import asyncio
 from app.config import GROQ_API_KEY, LLM_MODEL, LLM_MAX_TOKENS, LLM_TEMPERATURE
+from app.services.vector_store_service import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ class LLMService:
         self.base_url = "https://api.groq.com/openai/v1" 
         self.model = LLM_MODEL
         self.progression_manager = ChapterProgressionManager()
+        self.vector_store = VectorStoreService()
         
     async def chat_with_llm(
         self, 
@@ -157,6 +159,34 @@ class LLMService:
                 logger.info(f"Ações finais extraídas: {contextual_actions}")
             
             clean_response = self._clean_response_text(llm_response)
+            
+            if campaign_context and character_context:
+                try:
+                    chapter = campaign_context.get('current_chapter', 1) or 1
+                    phase = self.progression_manager.get_current_phase(interaction_count)
+                    
+                    doc_id = self.vector_store.store_narrative(
+                        narrative_text=clean_response,
+                        campaign_id=str(campaign_context.get('_id', 'unknown')),
+                        character_id=str(character_context.get('_id', 'unknown')),
+                        user_id=str(campaign_context.get('user_id', 'unknown')),
+                        interaction_count=interaction_count,
+                        chapter=int(chapter),
+                        phase=phase.value,
+                        metadata={
+                            "character_name": character_context.get('nome'),
+                            "character_class": character_context.get('classe'),
+                            "campaign_title": campaign_context.get('title'),
+                            "model_used": self.model,
+                            "message": message[:100]
+                        }
+                    )
+                    
+                    if doc_id:
+                        logger.info(f"Narrativa salva no ChromaDB: {doc_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Erro ao salvar no ChromaDB: {e}")
             
             progression_info = self._get_progression_info(interaction_count, campaign_context)
             
@@ -680,7 +710,6 @@ class LLMService:
                     "category": "progression"
                 }
             ]
-        
         elif phase == ProgressionPhase.DEVELOPMENT:
             progression_actions = [
                 {
@@ -704,6 +733,8 @@ class LLMService:
                     }
                 ]
         
+        return progression_actions
+    
     def _get_progression_info(self, interaction_count: int, campaign_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Retorna informações sobre a progressão atual"""
         chapter = campaign_context.get('current_chapter', 1) if campaign_context else 1

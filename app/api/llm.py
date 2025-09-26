@@ -11,6 +11,7 @@ from app.schemas.llm import (
 from app.services.llm_service import LLMService
 from app.services.character_service import CharacterService
 from app.services.campaign_service import CampaignService
+from app.services.vector_store_service import VectorStoreService
 from app.repositories.character_repo import CharacterRepository
 from app.core.database import get_database
 from app.api.auth import get_current_user
@@ -30,6 +31,9 @@ def get_character_service(db = Depends(get_database)) -> CharacterService:
 def get_campaign_service(db = Depends(get_database)) -> CampaignService:
     """Dependency injection para o serviço de campanhas"""
     return CampaignService(db)
+
+def get_vector_store_service() -> VectorStoreService:
+    return VectorStoreService()
 
 @router.post("/chat", response_model=LLMChatResponse, summary="Chat com LLM com progressão")
 async def chat_with_llm(
@@ -78,7 +82,9 @@ async def chat_with_llm(
                     "chapter": chapter_field,
                     "current_chapter": current_chapter,
                     "description": getattr(active_campaign, 'description', ''),
-                    "full_description": getattr(active_campaign, 'full_description', '')
+                    "full_description": getattr(active_campaign, 'full_description', ''),
+                    "user_id": current_user_id,
+                    "_id": campaign_id
                 }
                 logger.info(f"Contexto da campanha: {title_field} - Capítulo {current_chapter} - Interação {request.interaction_count}/10")
         except Exception as campaign_error:
@@ -110,7 +116,8 @@ async def chat_with_llm(
                         "raca": character.raca,
                         "classe": character.classe,
                         "descricao": character.descricao,
-                        "atributos": atributos_data
+                        "atributos": atributos_data,
+                        "_id": request.character_id
                     }
                     logger.info(f"Contexto do personagem: {character.name} ({character.raca} {character.classe})")
             except Exception as char_error:
@@ -250,4 +257,189 @@ async def llm_health_check(
             status="unhealthy",
             model="unknown",
             available=False
+        )
+
+@router.get("/chroma/health", summary="Health check do ChromaDB")
+async def chroma_health_check(
+    vector_store: VectorStoreService = Depends(get_vector_store_service)
+):
+    """Verifica status do ChromaDB"""
+    try:
+        health = vector_store.health_check()
+        return {
+            "success": True, 
+            "chromadb": health,
+            "message": "ChromaDB está operacional"
+        }
+    except Exception as e:
+        logger.error(f"Erro no health check do ChromaDB: {str(e)}")
+        return {
+            "success": False, 
+            "error": str(e),
+            "message": "Erro ao conectar com ChromaDB"
+        }
+
+@router.get("/chroma/campaign/{campaign_id}/history", summary="Histórico de narrativas da campanha")
+async def get_campaign_narrative_history(
+    campaign_id: str,
+    chapter: int = None,
+    limit: int = 20,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Recupera histórico de narrativas de uma campanha"""
+    try:
+        history = vector_store.get_campaign_history(
+            campaign_id=campaign_id,
+            chapter=chapter,
+            limit=limit
+        )
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "chapter": chapter,
+            "total": len(history),
+            "narratives": history
+        }
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar histórico: {str(e)}"
+        )
+
+@router.get("/chroma/campaign/{campaign_id}/chapter/{chapter}/summary", summary="Resumo do capítulo")
+async def get_chapter_summary(
+    campaign_id: str,
+    chapter: int,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Retorna resumo completo de um capítulo específico"""
+    try:
+        summary = vector_store.get_chapter_summary(
+            campaign_id=campaign_id,
+            chapter=chapter
+        )
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Erro ao gerar resumo: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao gerar resumo: {str(e)}"
+        )
+
+@router.post("/chroma/search", summary="Busca vetorial de narrativas")
+async def search_narratives(
+    query: str,
+    campaign_id: str = None,
+    chapter: int = None,
+    n_results: int = 5,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Busca narrativas similares usando busca vetorial"""
+    try:
+        results = vector_store.search_similar_narratives(
+            query_text=query,
+            campaign_id=campaign_id,
+            chapter=chapter,
+            n_results=n_results
+        )
+        return {
+            "success": True,
+            "query": query,
+            "total_results": len(results),
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Erro na busca vetorial: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro na busca vetorial: {str(e)}"
+        )
+
+@router.delete("/chroma/campaign/{campaign_id}", summary="Deletar narrativas da campanha")
+async def delete_campaign_narratives(
+    campaign_id: str,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Remove todas as narrativas de uma campanha do ChromaDB"""
+    try:
+        success = vector_store.delete_campaign_narratives(campaign_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Narrativas da campanha {campaign_id} removidas com sucesso"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Nenhuma narrativa encontrada para remover"
+            }
+    except Exception as e:
+        logger.error(f"Erro ao deletar narrativas: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao deletar narrativas: {str(e)}"
+        )
+    
+@router.get("/chroma/campaign/{campaign_id}/full-context", summary="Contexto completo da campanha para retomada")
+async def get_full_campaign_context(
+    campaign_id: str,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    Retorna todo o contexto narrativo da campanha para retomar conversa
+    Ordena cronologicamente para reconstruir a história
+    """
+    try:
+        history = vector_store.get_campaign_history(
+            campaign_id=campaign_id,
+            chapter=None,
+            limit=100
+        )
+
+        history.sort(key=lambda x: x['metadata'].get('timestamp', ''))
+        
+        conversation_history = []
+        for item in history:
+            if item['metadata'].get('message'):
+                conversation_history.append({
+                    "role": "user",
+                    "content": item['metadata']['message'],
+                    "timestamp": item['metadata']['timestamp'],
+                    "interaction": item['metadata']['interaction_count']
+                })
+
+            conversation_history.append({
+                "role": "assistant", 
+                "content": item['narrative'],
+                "timestamp": item['metadata']['timestamp'],
+                "interaction": item['metadata']['interaction_count'],
+                "chapter": item['metadata']['chapter'],
+                "phase": item['metadata']['phase']
+            })
+        
+        logger.info(f"Contexto carregado para campanha {campaign_id}: {len(conversation_history)} mensagens")
+        
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "total_messages": len(conversation_history),
+            "conversation_history": conversation_history,
+            "last_interaction": history[-1]['metadata']['interaction_count'] if history else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar contexto: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar contexto: {str(e)}"
         )

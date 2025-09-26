@@ -35,4 +35,8 @@ build/
 # --- Config local ---
 .env
 .env.*
-!env.example   # mantém o env.example no repo
+!env.example  
+
+# ChromaDB
+chroma_db/
+*.chroma
