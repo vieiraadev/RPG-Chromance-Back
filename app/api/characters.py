@@ -181,3 +181,24 @@ async def get_character_inventory(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=str(e)
         )
+    
+@router.post("/{character_id}/inventory/{item_id}/use", response_model=CharacterResponse)
+async def use_item(
+    character_id: str,
+    item_id: str,
+    service: CharacterService = Depends(get_character_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Usa um item do inventário, aplicando seus bônus e removendo-o"""
+    try:
+        character = await service.use_item(character_id, item_id, current_user_id)
+        if not character:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Personagem ou item não encontrado"
+            )
+        return character
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
