@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "rpgdb")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:4200")

@@ -1,15 +1,17 @@
-from typing import List
+from typing import List, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.database import get_db
 from app.services.campaign_service import CampaignService
+from app.services.vector_store_service import VectorStoreService
 from app.schemas.campaign import CampaignCreate, CampaignOut, CampaignUpdate, StartCampaignRequest
 from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 def get_campaign_service(db=Depends(get_db)) -> CampaignService:
-    return CampaignService(db)
+    vector_store = VectorStoreService()
+    return CampaignService(db, vector_store_service=vector_store)
 
 @router.get("/", response_model=dict)
 async def get_campaigns(
@@ -76,7 +78,7 @@ async def start_campaign(
     try:
         campaign = await service.get_campaign_by_id(request.campaign_id, user_id=current_user_id)
         if not campaign:
-            await service.seed_campaigns(user_id=current_user_id)
+            await service.seed_campaigns()
             campaign = await service.get_campaign_by_id(request.campaign_id, user_id=current_user_id)
         
         if not campaign:
@@ -174,7 +176,7 @@ async def seed_campaigns(
 ):
     """Popula o banco com campanhas base para o usuário"""
     try:
-        campaigns = await service.seed_campaigns(user_id=current_user_id)
+        campaigns = await service.seed_campaigns()
         return {
             "success": True,
             "message": f"{len(campaigns)} campanhas criadas com sucesso!",
@@ -184,4 +186,42 @@ async def seed_campaigns(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+
+@router.get("/world-lore/summary", response_model=Dict[str, Any])
+async def get_world_lore_summary(
+    current_user_id: str = Depends(get_current_user)
+):
+    """Retorna resumo do World Lore acumulado"""
+    try:
+        vector_store = VectorStoreService()
+        lore_summary = vector_store.get_world_lore_summary()
+        
+        return {
+            "success": True,
+            "lore": lore_summary
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao buscar world lore: {str(e)}"
+        )
+
+@router.get("/chromadb/health", response_model=Dict[str, Any])
+async def check_chromadb_health(
+    current_user_id: str = Depends(get_current_user)
+):
+    """Verifica saúde das collections do ChromaDB"""
+    try:
+        vector_store = VectorStoreService()
+        health = vector_store.health_check()
+        
+        return {
+            "success": True,
+            "chromadb": health
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao verificar ChromaDB: {str(e)}"
         )

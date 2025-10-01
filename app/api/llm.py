@@ -29,8 +29,9 @@ def get_character_service(db = Depends(get_database)) -> CharacterService:
     return CharacterService(repository)
 
 def get_campaign_service(db = Depends(get_database)) -> CampaignService:
-    """Dependency injection para o serviço de campanhas"""
-    return CampaignService(db)
+    """Dependency injection para o serviço de campanhas com VectorStore"""
+    vector_store = VectorStoreService()
+    return CampaignService(db, vector_store_service=vector_store)
 
 def get_vector_store_service() -> VectorStoreService:
     return VectorStoreService()
@@ -442,4 +443,30 @@ async def get_full_campaign_context(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao buscar contexto: {str(e)}"
+        )
+
+@router.delete("/chroma/campaign/{campaign_id}/current-only", summary="Limpar apenas campaign_current")
+async def clear_current_campaign_only(
+    campaign_id: str,
+    vector_store: VectorStoreService = Depends(get_vector_store_service),
+    current_user_id: str = Depends(get_current_user)
+):
+    """Remove apenas narrativas da campaign_current, mantém archive e world_lore"""
+    try:
+        success = vector_store.clear_current_campaign_only(campaign_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Narrativas atuais da campanha {campaign_id} removidas. World lore preservado."
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Nenhuma narrativa encontrada para remover"
+            }
+    except Exception as e:
+        logger.error(f"Erro ao limpar campaign_current: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao limpar narrativas: {str(e)}"
         )

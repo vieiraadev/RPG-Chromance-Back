@@ -4,13 +4,17 @@ from bson import ObjectId
 from pymongo.database import Database
 from app.models.campaign import Campaign
 from app.schemas.campaign import CampaignCreate, CampaignOut, CampaignUpdate
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CampaignService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, vector_store_service=None):
         self.db = db
         self.campaigns_collection = db["campaigns"]
         self.progress_collection = db["campaign_progress"]
+        self.vector_store = vector_store_service
 
     async def get_campaigns_with_progress(self, user_id: str = None) -> List[Dict]:
         """Retorna todas as campanhas base com o progresso do usuário mesclado"""
@@ -148,7 +152,43 @@ class CampaignService:
         return await self.get_campaign_by_id(progress["campaign_id"], user_id)
 
     async def complete_chapter(self, campaign_id: str, chapter: int, user_id: str) -> Optional[CampaignOut]:
-        """Marca um capítulo como completo no progresso do usuário"""
+        """
+        Marca um capítulo como completo no progresso do usuário.
+        NOVO: Extrai lore e limpa narrativas do ChromaDB.
+        """
+        logger.info(f"Finalizando capítulo {chapter} da campanha {campaign_id}")
+        
+        if self.vector_store:
+            try:
+                lore_count = self.vector_store.extract_lore_from_chapter(
+                    campaign_id=campaign_id,
+                    chapter=chapter,
+                    user_id=user_id
+                )
+                logger.info(f"✓ {lore_count} itens de lore extraídos")
+            except Exception as e:
+                logger.error(f"Erro ao extrair lore: {e}")
+        
+        if self.vector_store:
+            try:
+                self.vector_store.archive_chapter(
+                    campaign_id=campaign_id,
+                    chapter=chapter
+                )
+                logger.info(f"✓ Capítulo {chapter} arquivado")
+            except Exception as e:
+                logger.error(f"Erro ao arquivar: {e}")
+
+        if self.vector_store:
+            try:
+                self.vector_store.clear_chapter_narratives(
+                    campaign_id=campaign_id,
+                    chapter=chapter
+                )
+                logger.info(f"✓ Narrativas do capítulo {chapter} limpas")
+            except Exception as e:
+                logger.error(f"Erro ao limpar narrativas: {e}")
+
         result = self.progress_collection.update_one(
             {"user_id": user_id, "campaign_id": campaign_id},
             {
@@ -161,6 +201,7 @@ class CampaignService:
         )
         
         if result.modified_count:
+            logger.info(f"✓ Progresso atualizado: capítulo {chapter} → {chapter + 1}")
             return await self.get_campaign_by_id(campaign_id, user_id)
         
         return None

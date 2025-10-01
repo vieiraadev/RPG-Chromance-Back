@@ -227,19 +227,20 @@ class LLMService:
             if not similar_narratives:
                 return ""
 
-            context_parts = ["CONTEXTO RELEVANTE DAS NARRATIVAS ANTERIORES:"]
+            context_parts = ["CONTEXTO RELEVANTE (Conhecimento do Mundo):"]
             
             for i, item in enumerate(similar_narratives, 1):
                 narrative = item['narrative']
                 metadata = item['metadata']
-                interaction = metadata.get('interaction_count', '?')
-                phase = metadata.get('phase', 'unknown')
+                source = item.get('source', 'unknown')
+                
+                source_label = "LORE" if source == "lore" else f"Cap {metadata.get('chapter', '?')}"
                 
                 if len(narrative) > 200:
                     narrative = narrative[:197] + "..."
                 
                 context_parts.append(
-                    f"{i}. [Interação {interaction} - {phase}] {narrative}"
+                    f"{i}. [{source_label}] {narrative}"
                 )
             
             context_text = "\n".join(context_parts)
@@ -386,8 +387,14 @@ class LLMService:
 
                 {rag_context}
 
-                IMPORTANTE: Use essas narrativas anteriores para manter CONSISTÊNCIA e CONTINUIDADE.
-                Evite repetir eventos, mas construa em cima do que já aconteceu."""
+                REGRA CRÍTICA DE MEMÓRIA:
+                - O contexto acima mostra APENAS conhecimento geral do mundo (locais, itens, NPCs que EXISTEM)
+                - Itens marcados como [LORE] são conhecimento universal do mundo
+                - NUNCA invente que o jogador visitou locais, pegou itens ou conheceu NPCs a menos que esteja EXPLICITAMENTE no histórico recente desta conversa
+                - Você pode dizer "existe uma Catedral", mas NÃO "você esteve na Catedral" (a menos que tenha acontecido nesta campanha)
+                - Você pode dizer "o Cubo das Sombras é uma relíquia poderosa", mas NÃO "você pegou o Cubo" (a menos que tenha acontecido nesta campanha)
+                - Se o jogador perguntar sobre algo do passado, responda com conhecimento geral, não com memórias inventadas
+                - MANTENHA CONSISTÊNCIA: Use o contexto para saber o que EXISTE, mas NÃO para inventar experiências do jogador"""
 
         if campaign_context:
             campaign_info = f"""
