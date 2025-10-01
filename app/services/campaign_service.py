@@ -140,10 +140,10 @@ class CampaignService:
         return await self.get_campaign_by_id(campaign_id, user_id)
 
     async def get_active_campaign(self, user_id: str) -> Optional[CampaignOut]:
-        """Retorna a campanha ativa do usuário"""
+        """Retorna a campanha ativa do usuário (apenas in_progress)"""
         progress = self.progress_collection.find_one({
             "user_id": user_id,
-            "status": "in_progress"
+            "status": "in_progress" 
         })
         
         if not progress:
@@ -154,10 +154,10 @@ class CampaignService:
     async def complete_chapter(self, campaign_id: str, chapter: int, user_id: str) -> Optional[CampaignOut]:
         """
         Marca um capítulo como completo no progresso do usuário.
-        NOVO: Extrai lore e limpa narrativas do ChromaDB.
+        Extrai lore, arquiva e limpa narrativas do ChromaDB.
         """
         logger.info(f"Finalizando capítulo {chapter} da campanha {campaign_id}")
-        
+
         if self.vector_store:
             try:
                 lore_count = self.vector_store.extract_lore_from_chapter(
@@ -194,14 +194,17 @@ class CampaignService:
             {
                 "$addToSet": {"chapters_completed": chapter},
                 "$set": {
-                    "current_chapter": chapter + 1,
+                    "status": "completed", 
+                    "completed_at": datetime.now(),
+                    "active_character_id": None, 
+                    "active_character_name": None,
                     "last_played_at": datetime.now()
                 }
             }
         )
         
         if result.modified_count:
-            logger.info(f"✓ Progresso atualizado: capítulo {chapter} → {chapter + 1}")
+            logger.info(f"✓ Capítulo {chapter} marcado como completo")
             return await self.get_campaign_by_id(campaign_id, user_id)
         
         return None
@@ -217,14 +220,24 @@ class CampaignService:
             {
                 "$set": {
                     "status": "cancelled",
+                    "active_character_id": None,
+                    "active_character_name": None,
                     "cancelled_at": datetime.now()
                 }
             }
         )
         return result.modified_count > 0
 
+    async def update_campaign_progress(self, user_id: str, campaign_id: str, update_data: dict) -> bool:
+        """Atualiza progresso da campanha do usuário"""
+        result = self.progress_collection.update_one(
+            {"user_id": user_id, "campaign_id": campaign_id},
+            {"$set": update_data}
+        )
+        return result.modified_count > 0
+
     async def update_campaign(self, campaign_id: str, update_data: any, user_id: str = None) -> Optional[CampaignOut]:
-        """Atualiza dados de uma campanha (compatibilidade com API)"""
+        """Atualiza dados de uma campanha (retrocompatibilidade)"""
         if not user_id:
             return None
             

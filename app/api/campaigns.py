@@ -6,12 +6,17 @@ from app.services.campaign_service import CampaignService
 from app.services.vector_store_service import VectorStoreService
 from app.schemas.campaign import CampaignCreate, CampaignOut, CampaignUpdate, StartCampaignRequest
 from app.api.auth import get_current_user
+from app.core.dependencies import get_campaign_service, get_vector_store_service
+from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
+
+class CompleteChapterRequest(BaseModel):
+    character_id: str
+    chapter_completed: int
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
-
-def get_campaign_service(db=Depends(get_db)) -> CampaignService:
-    vector_store = VectorStoreService()
-    return CampaignService(db, vector_store_service=vector_store)
 
 @router.get("/", response_model=dict)
 async def get_campaigns(
@@ -30,7 +35,7 @@ async def get_active_campaign_status(
     current_user_id: str = Depends(get_current_user),
     service: CampaignService = Depends(get_campaign_service)
 ):
-    """Retorna o status da campanha ativa do usuário"""
+    """Retorna o status da campanha ativa do usuário (apenas in_progress)"""
     active_campaign = await service.get_active_campaign(current_user_id)
     return {
         "has_active_campaign": active_campaign is not None,
@@ -141,40 +146,48 @@ async def cancel_campaign(
         "message": "Campanha cancelada com sucesso"
     }
 
-@router.put("/{campaign_id}/complete-chapter", response_model=dict)
+@router.put("/{campaign_id}/complete-chapter", summary="Completar capítulo")
 async def complete_chapter(
     campaign_id: str,
-    request: dict,
-    current_user_id: str = Depends(get_current_user),
-    service: CampaignService = Depends(get_campaign_service)
+    request: CompleteChapterRequest,
+    campaign_service: CampaignService = Depends(get_campaign_service),
+    current_user_id: str = Depends(get_current_user)
 ):
-    """Marca um capítulo como completo"""
-    chapter = request.get("chapter_completed")
-    if not chapter:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Capítulo não informado"
+    """
+    Completa capítulo: extrai lore, arquiva, limpa current.
+    Marca como completed e libera personagem.
+    """
+    try:
+        result = await campaign_service.complete_chapter(
+            campaign_id=campaign_id,
+            chapter=request.chapter_completed,
+            user_id=current_user_id
         )
-    
-    campaign = await service.complete_chapter(campaign_id, chapter, user_id=current_user_id)
-    if not campaign:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campanha não encontrada"
-        )
-    
-    return {
-        "success": True,
-        "message": f"Capítulo {chapter} completado!",
-        "campaign": campaign
-    }
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="Campanha não encontrada ou erro ao completar"
+            )
+        
+        logger.info(f"✓ Capítulo {request.chapter_completed} completado com sucesso")
+        
+        return {
+            "success": True,
+            "message": f"Capítulo {request.chapter_completed} completado!",
+            "redirect_to_campaigns": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao completar capítulo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/seed", response_model=dict)
 async def seed_campaigns(
     current_user_id: str = Depends(get_current_user),
     service: CampaignService = Depends(get_campaign_service)
 ):
-    """Popula o banco com campanhas base para o usuário"""
+    """Popula o banco com campanhas base"""
     try:
         campaigns = await service.seed_campaigns()
         return {
