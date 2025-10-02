@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.security import verify_token
 from app.schemas.auth import (
@@ -135,7 +135,7 @@ async def refresh_token(body: RefreshTokenRequest):
 async def get_user_profile(current_user_id: str = Depends(get_current_user)):
     """
     Endpoint para obter dados do usuário atual:
-    - Verifica token válido
+    - Verifica token válido (dura 24 horas)
     - Confirma que usuário existe e está ativo
     - Retorna dados básicos (sem informações sensíveis)
     """
@@ -170,7 +170,7 @@ async def update_user_profile(
 ):
     """
     Endpoint para atualizar dados do usuário atual:
-    - Verifica token válido
+    - Verifica token válido (dura 24 horas)
     - Permite alterar nome, email e senha
     - Valida se novo email não está em uso por outro usuário
     - Retorna dados atualizados
