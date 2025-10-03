@@ -6,8 +6,8 @@ from app.core.database import get_database
 from app.repositories.character_repo import CharacterRepository
 from app.services.character_service import CharacterService
 from app.schemas.character import (
-    CharacterCreate, 
-    CharacterUpdate, 
+    CharacterCreate,
+    CharacterUpdate,
     CharacterResponse,
     CharacterListResponse
 )
@@ -43,7 +43,7 @@ async def list_characters(
     page: int = Query(1, ge=1, description="Número da página"),
     limit: int = Query(100, ge=1, le=1000, description="Itens por página"),
     service: CharacterService = Depends(get_character_service),
-    current_user_id: str = Depends(get_current_user) 
+    current_user_id: str = Depends(get_current_user)
 ):
     """Lista apenas os personagens do usuário autenticado"""
     try:
@@ -63,7 +63,7 @@ async def get_selected_character(
         character = await service.get_selected_character(current_user_id)
         if not character:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Nenhum personagem selecionado"
             )
         return character
@@ -84,7 +84,7 @@ async def select_character(
         character = await service.select_character(character_id, current_user_id)
         if not character:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Personagem não encontrado ou não autorizado"
             )
         return character
@@ -98,14 +98,14 @@ async def select_character(
 async def get_character(
     character_id: str,
     service: CharacterService = Depends(get_character_service),
-    current_user_id: str = Depends(get_current_user) 
+    current_user_id: str = Depends(get_current_user)
 ):
     """Busca um personagem específico"""
     try:
         character = await service.get_character(character_id, current_user_id)
         if not character:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Personagem não encontrado ou não autorizado"
             )
         return character
@@ -127,7 +127,7 @@ async def update_character(
         character = await service.update_character(character_id, update_data, current_user_id)
         if not character:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Personagem não encontrado ou não autorizado"
             )
         return character
@@ -139,26 +139,30 @@ async def update_character(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{character_id}", status_code=status.HTTP_200_OK)
 async def delete_character(
     character_id: str,
     service: CharacterService = Depends(get_character_service),
     current_user_id: str = Depends(get_current_user)
 ):
-    """Remove um personagem"""
+    """Remove permanentemente um personagem do banco de dados"""
     try:
         success = await service.delete_character(character_id, current_user_id)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Personagem não encontrado ou não autorizado"
             )
-        return None
+        return {
+            "message": "Personagem removido com sucesso",
+            "deleted": True,
+            "character_id": character_id
+        }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-    
+
 
 @router.get("/{character_id}/inventory", response_model=list, summary="Buscar inventário")
 async def get_character_inventory(
@@ -178,10 +182,11 @@ async def get_character_inventory(
         return inventory
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    
+
+
 @router.post("/{character_id}/inventory/{item_id}/use", response_model=CharacterResponse)
 async def use_item(
     character_id: str,
@@ -194,7 +199,7 @@ async def use_item(
         character = await service.use_item(character_id, item_id, current_user_id)
         if not character:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail="Personagem ou item não encontrado"
             )
         return character

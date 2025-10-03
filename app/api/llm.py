@@ -3,7 +3,6 @@ from typing import Dict, Any
 from app.schemas.llm import (
     LLMChatRequest,
     LLMChatResponse,
-    CharacterSuggestionRequest,
     LLMHealthCheck,
     ContextualAction,
     ProgressionResetResponse
@@ -218,24 +217,6 @@ async def reset_chapter_progression(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao resetar progressão: {str(e)}"
-        )
-
-@router.post("/character-suggestion", response_model=LLMChatResponse, summary="Sugestão de personagem")
-async def suggest_character(
-    request: CharacterSuggestionRequest,
-    llm_service: LLMService = Depends(get_llm_service)
-):
-    """
-    Gera sugestões para criação/melhoria de personagem usando LLM
-    """
-    try:
-        result = await llm_service.generate_character_suggestion(request.partial_data)
-        return LLMChatResponse(**result)
-    except Exception as e:
-        logger.error(f"Erro na sugestão de personagem: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao gerar sugestão: {str(e)}"
         )
 
 @router.get("/health", response_model=LLMHealthCheck, summary="Health check da LLM")

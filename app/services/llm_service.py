@@ -852,11 +852,6 @@ class LLMService:
         
         return None
     
-    async def generate_character_suggestion(self, partial_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Gera sugestões para criação de personagem"""
-        prompt = f"Baseado nos dados: {partial_data}\n\nSugira melhorias para um personagem cyberpunk de Chromance. Seja criativo mas coerente."
-        return await self.chat_with_llm(prompt, generate_actions=False)
-    
     async def test_connection(self) -> Dict[str, Any]:
         """Testa a conexão com o Groq"""
         try:

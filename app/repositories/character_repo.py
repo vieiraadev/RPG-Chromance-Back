@@ -113,18 +113,15 @@ class CharacterRepository:
             return None
     
     async def delete(self, character_id: str, user_id: str = None) -> bool:
-        """Soft delete de um personagem"""
+        """ Remove o personagem do banco"""
         try:
             query = {"_id": ObjectId(character_id)}
             if user_id:
                 query["user_id"] = user_id
             
-            result = self.collection.update_one(
-                query,
-                {"$set": {"active": False, "updated_at": datetime.utcnow()}}
-            )
+            result = self.collection.delete_one(query)
             
-            return result.modified_count > 0
+            return result.deleted_count > 0
             
         except Exception as e:
             print(f"Erro ao deletar personagem: {e}")
