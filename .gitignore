@@ -34,8 +34,6 @@ build/
 
 # --- Config local ---
 .env
-.env.*
-!env.example  
 
 # ChromaDB
 chroma_db/
