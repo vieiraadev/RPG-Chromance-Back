@@ -3,7 +3,6 @@ from typing import Dict, Any
 from app.schemas.llm import (
     LLMChatRequest,
     LLMChatResponse,
-    LLMHealthCheck,
     ContextualAction,
     ProgressionResetResponse
 )
@@ -218,48 +217,6 @@ async def reset_chapter_progression(
             status_code=500,
             detail=f"Erro ao resetar progressão: {str(e)}"
         )
-
-@router.get("/health", response_model=LLMHealthCheck, summary="Health check da LLM")
-async def llm_health_check(
-    llm_service: LLMService = Depends(get_llm_service)
-):
-    """
-    Verifica se a LLM está disponível
-    """
-    try:
-        result = await llm_service.test_connection()
-        return LLMHealthCheck(
-            status="healthy" if result["success"] else "unhealthy",
-            model=result["model"],
-            available=result["success"]
-        )
-    except Exception as e:
-        logger.error(f"Erro no health check: {str(e)}")
-        return LLMHealthCheck(
-            status="unhealthy",
-            model="unknown",
-            available=False
-        )
-
-@router.get("/chroma/health", summary="Health check do ChromaDB")
-async def chroma_health_check(
-    vector_store: VectorStoreService = Depends(get_vector_store_service)
-):
-    """Verifica status do ChromaDB"""
-    try:
-        health = vector_store.health_check()
-        return {
-            "success": True, 
-            "chromadb": health,
-            "message": "ChromaDB está operacional"
-        }
-    except Exception as e:
-        logger.error(f"Erro no health check do ChromaDB: {str(e)}")
-        return {
-            "success": False, 
-            "error": str(e),
-            "message": "Erro ao conectar com ChromaDB"
-        }
 
 @router.get("/chroma/campaign/{campaign_id}/history", summary="Histórico de narrativas da campanha")
 async def get_campaign_narrative_history(

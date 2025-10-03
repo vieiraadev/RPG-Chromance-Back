@@ -219,22 +219,3 @@ async def get_world_lore_summary(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao buscar world lore: {str(e)}"
         )
-
-@router.get("/chromadb/health", response_model=Dict[str, Any])
-async def check_chromadb_health(
-    current_user_id: str = Depends(get_current_user)
-):
-    """Verifica saúde das collections do ChromaDB"""
-    try:
-        vector_store = VectorStoreService()
-        health = vector_store.health_check()
-        
-        return {
-            "success": True,
-            "chromadb": health
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao verificar ChromaDB: {str(e)}"
-        )

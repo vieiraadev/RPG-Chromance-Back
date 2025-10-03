@@ -851,22 +851,3 @@ class LLMService:
                 logger.error("Falha ao adicionar recompensa ao inventário")
         
         return None
-    
-    async def test_connection(self) -> Dict[str, Any]:
-        """Testa a conexão com o Groq"""
-        try:
-            result = await self.chat_with_llm("teste", max_retries=1, generate_actions=False)
-            return {
-                "success": result["success"],
-                "model": self.model,
-                "available": result["success"],
-                "provider": "Groq"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "model": self.model,
-                "available": False,
-                "error": str(e),
-                "provider": "Groq"
-            }

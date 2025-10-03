@@ -56,12 +56,6 @@ class StoryContinuationRequest(BaseModel):
     current_situation: str = Field(..., description="Situação atual")
     character_id: str = Field(..., description="ID do personagem")
 
-class LLMHealthCheck(BaseModel):
-    """Health check da LLM"""
-    status: str = Field(..., description="Status da LLM")
-    model: str = Field(..., description="Modelo utilizado")
-    available: bool = Field(..., description="Se está disponível")
-
 class ProgressionResetResponse(BaseModel):
     """Response para reset de progressão"""
     success: bool = Field(..., description="Se foi bem-sucedido")

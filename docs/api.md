@@ -201,7 +201,7 @@ Cancelar uma campanha.
 ### PUT /api/campaigns/{campaign_id}/complete-chapter
 Completar um capítulo da campanha.
 
-**Descrição:** Complete Chapter
+**Descrição:** Completar capítulo
 
 **Parâmetros:**
 - `campaign_id` - ID da campanha
@@ -212,6 +212,13 @@ Completar um capítulo da campanha.
 Criar campanhas de exemplo (seed).
 
 **Descrição:** Seed Campaigns
+
+**Autenticação:** Requerida 🔒
+
+### GET /api/campaigns/world-lore/summary
+Obter resumo do lore do mundo da campanha.
+
+**Descrição:** Get World Lore Summary
 
 **Autenticação:** Requerida 🔒
 
@@ -239,16 +246,6 @@ Resetar a progressão do capítulo atual.
 Obter sugestões de personagens do LLM.
 
 **Descrição:** Sugestão de personagem
-
-### GET /api/llm/health
-Verificar status de saúde do serviço LLM.
-
-**Descrição:** Health check da LLM
-
-### GET /api/llm/chroma/health
-Verificar status de saúde do ChromaDB.
-
-**Descrição:** Health check do ChromaDB
 
 ### GET /api/llm/chroma/campaign/{campaign_id}/history
 Obter histórico de narrativas de uma campanha.
@@ -298,16 +295,15 @@ Obter contexto completo da campanha para retomada.
 
 **Autenticação:** Requerida 🔒
 
----
+### DELETE /api/llm/chroma/campaign/{campaign_id}/current-only
+Limpar apenas a progressão atual da campanha (campaign_current).
 
-## Infra
+**Descrição:** Limpar apenas campaign_current
 
-Endpoints de infraestrutura e monitoramento.
+**Parâmetros:**
+- `campaign_id` - ID da campanha
 
-### GET /health
-Verificar status de saúde geral da API.
-
-**Descrição:** Health
+**Autenticação:** Requerida 🔒
 
 ---
 
