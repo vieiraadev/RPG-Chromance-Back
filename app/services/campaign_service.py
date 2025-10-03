@@ -40,9 +40,6 @@ class CampaignService:
                     doc["chapters_completed"] = progress.get("chapters_completed", [])
                     doc["started_at"] = progress.get("started_at", None)
                     doc["last_played_at"] = progress.get("last_played_at", None)
-                    doc["score"] = progress.get("score", 0)
-                    doc["battles_won"] = progress.get("battles_won", 0)
-                    doc["battles_lost"] = progress.get("battles_lost", 0)
                 else:
                     doc["status"] = None
                     doc["active_character_id"] = None
@@ -50,9 +47,6 @@ class CampaignService:
                     doc["current_chapter"] = 1
                     doc["chapters_completed"] = []
                     doc["started_at"] = None
-                    doc["score"] = 0
-                    doc["battles_won"] = 0
-                    doc["battles_lost"] = 0
             
             campaigns.append(CampaignOut(**doc))
         
@@ -88,7 +82,6 @@ class CampaignService:
                 doc["current_chapter"] = progress.get("current_chapter", 1)
                 doc["chapters_completed"] = progress.get("chapters_completed", [])
                 doc["started_at"] = progress.get("started_at", None)
-                doc["score"] = progress.get("score", 0)
         
         return CampaignOut(**doc)
 
@@ -123,9 +116,6 @@ class CampaignService:
             "active_character_name": character_name,
             "current_chapter": 1,
             "chapters_completed": [],
-            "score": 0,
-            "battles_won": 0,
-            "battles_lost": 0,
             "items_collected": [],
             "started_at": datetime.now(),
             "last_played_at": datetime.now()
@@ -258,18 +248,6 @@ class CampaignService:
                 return await self.get_campaign_by_id(campaign_id, user_id)
         
         return None
-
-    async def update_battle_stats(self, campaign_id: str, user_id: str, won: bool) -> bool:
-        """Atualiza estatísticas de batalha"""
-        field = "battles_won" if won else "battles_lost"
-        result = self.progress_collection.update_one(
-            {"user_id": user_id, "campaign_id": campaign_id},
-            {
-                "$inc": {field: 1, "score": 10 if won else -5},
-                "$set": {"last_played_at": datetime.now()}
-            }
-        )
-        return result.modified_count > 0
 
     async def seed_campaigns(self) -> List[CampaignOut]:
         """Cria as campanhas base (globais) no banco"""

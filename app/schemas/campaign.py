@@ -46,7 +46,7 @@ class CampaignOut(BaseModel):
         }
     )
     
-    id: str 
+    id: str
     campaign_id: str
     title: str
     chapter: int
@@ -56,18 +56,12 @@ class CampaignOut(BaseModel):
     thumbnail: str
     rewards: List[RewardSchema]
     is_locked: bool
-    
     user_id: Optional[str] = None
     status: Optional[str] = None
     active_character_id: Optional[str] = None
     active_character_name: Optional[str] = None
     current_chapter: Optional[int] = None
     chapters_completed: List[int] = Field(default_factory=list)
-    
-    score: Optional[int] = 0
-    battles_won: Optional[int] = 0
-    battles_lost: Optional[int] = 0
-    
     created_at: datetime
     updated_at: datetime
     started_at: Optional[datetime] = None
