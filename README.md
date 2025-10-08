@@ -86,15 +86,6 @@ Estas instruções permitirão que você tenha uma cópia do projeto em operaç�
 
 ## 🐳 Executando com Docker
 
-### Estrutura de Diretórios
-
-```
-/sua-pasta-de-projetos
-├── /RPG-Chromance-Back/   <-- (repositório backend)
-├── /RPG-Chromance-Front/  <-- (repositório frontend)
-└── docker-compose.yml     <-- (crie este arquivo na raiz)
-```
-
 ### Docker Compose Completo
 
 Crie um arquivo `docker-compose.yml` na raiz que contenha:
