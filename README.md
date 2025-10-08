@@ -97,60 +97,23 @@ Estas instruções permitirão que você tenha uma cópia do projeto em operaç�
 
 ### Docker Compose Completo
 
-Crie um arquivo `docker-compose.yml` na raiz que contenha ambos os repositórios:
+Crie um arquivo `docker-compose.yml` na raiz que contenha:
 
 ```yaml
-version: "3.8"
-
 services:
-  backend:
-    build:
-      context: ./RPG-Chromance-Back
-      dockerfile: ./.devcontainer/Dockerfile
-    container_name: rpg_chromance_backend
-    volumes:
-      - ./RPG-Chromance-Back:/workspaces/RPG-Chromance-Back:cached
-      - ./RPG-Chromance-Back/chroma_db:/workspaces/RPG-Chromance-Back/chroma_db
-    command: sleep infinity
-    ports:
-      - "8000:8000"
-    depends_on:
-      - mongo
-    env_file:
-      - ./RPG-Chromance-Back/.env
-    environment:
-      MONGO_URI: "mongodb://mongo:27017"
-      MONGO_DB: "rpgdb"
-
-  frontend:
-    build:
-      context: ./RPG-Chromance-Front
-      dockerfile: ./.devcontainer/Dockerfile
-    container_name: rpg_chromance_frontend
-    volumes:
-      - ./RPG-Chromance-Front:/workspace:cached
-      - /workspace/node_modules
-    command: sleep infinity
-    ports:
-      - "4200:4200"
-
   mongo:
     image: mongo:7
-    container_name: rpg_chromance_mongo
-    restart: unless-stopped
+    container_name: rpg_mongo
     ports:
       - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: rpgdb
     volumes:
-      - mongodb_data:/data/db
+      - mongo_data:/data/db
 
   mongo-express:
     image: mongo-express:1
-    container_name: rpg_chromance_mongo_express
-    restart: unless-stopped
-    depends_on:
-      - mongo
+    depends_on: [mongo]
     ports:
       - "8081:8081"
     environment:
@@ -159,7 +122,8 @@ services:
       ME_CONFIG_BASICAUTH_PASSWORD: admin
 
 volumes:
-  mongodb_data:
+  mongo_data:
+
 ```
 
 ### Passos para Execução
